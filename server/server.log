@@ -1,0 +1,45 @@
+Initialized ComplianceAuditLogger
+🔑 Groq API Key status: ✅ Configured
+🖥️ Platform: darwin, Monitoring interval: 8000ms, Browser check: 5000ms
+✅ Browser monitoring and screenshots: ENABLED (Cross-platform support with buildpacks)
+🚫 Disallowed sites loaded: [
+  'example.com',
+  'example.org',
+  'https://youtube.com',
+  'https://github.com'
+]
+objc[27374]: Class GNotificationCenterDelegate is implemented in both /Users/rishabh/Downloads/workflow-blackhole/server/node_modules/@img/sharp-libvips-darwin-arm64/lib/libvips-cpp.42.dylib (0x13c56da28) and /Users/rishabh/Downloads/workflow-blackhole/server/node_modules/canvas/build/Release/libgio-2.0.0.dylib (0x108a744b8). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+(node:27374) [MONGOOSE] Warning: Duplicate schema index on {"approval_status":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Server running on port 5001
+Auto-end day job: Enabled
+Max working hours: 8 hours
+OCR worker initialized successfully
+Connected to MongoDB
+✅ New client connected: MQ_elhBb_52L2Mc_AAAB
+👤 Socket MQ_elhBb_52L2Mc_AAAB joined room: user_681dc4612ae66516796d47da
+👤 Socket MQ_elhBb_52L2Mc_AAAB joined room: department_undefined
+✅ New client connected: HUN-jbCk94d0mzDFAAAD
+👤 Socket HUN-jbCk94d0mzDFAAAD joined room: user_681dc4612ae66516796d47da
+👤 Socket HUN-jbCk94d0mzDFAAAD joined room: department_undefined
+📊 Attendance Stats: {
+  total: 58,
+  present: 23,
+  absent: 35,
+  withAims: 12,
+  employeesCount: 58
+}
+📊 Attendance Stats: {
+  total: 58,
+  present: 23,
+  absent: 35,
+  withAims: 12,
+  employeesCount: 58
+}
+📊 Attendance Stats: {
+  total: 58,
+  present: 23,
+  absent: 35,
+  withAims: 12,
+  employeesCount: 58
+}
