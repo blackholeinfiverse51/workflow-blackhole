@@ -148,6 +148,7 @@ const pushRoutes = require('./routes/push'); // Add this line
 const attendanceRoutes = require('./routes/attendance'); // New attendance routes
 const leaveRoutes = require('./routes/leave'); // New leave routes
 const salaryRoutes = require('./routes/salary'); // New salary routes
+const enhancedSalaryRoutes = require('./routes/enhancedSalary'); // Enhanced salary with live attendance
 const enhancedAimsRoutes = require('./routes/enhancedAims'); // Enhanced aims routes
 const consentRoutes = require('./routes/consent'); // Consent routes
 const alertRoutes = require('./routes/alerts'); // Alert routes
@@ -357,6 +358,7 @@ app.use("/api/attendance", attendanceRoutes); // Attendance management routes
 app.use("/api/attendance-dashboard", require("./routes/attendanceDashboard")); // Live attendance dashboard routes
 app.use("/api/leave", leaveRoutes); // Leave management routes
 app.use("/api/salary", salaryRoutes); // Salary management routes
+app.use("/api/enhanced-salary", enhancedSalaryRoutes); // Enhanced salary with live attendance and WFH tracking
 app.use("/api/enhanced-aims", enhancedAimsRoutes); // Enhanced aims with progress routes
 app.use('/api/consent', consentRoutes);
 app.use('/api/alerts', alertRoutes);

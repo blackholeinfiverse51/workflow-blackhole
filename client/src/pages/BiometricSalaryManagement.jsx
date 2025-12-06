@@ -77,7 +77,10 @@ const BiometricSalaryManagement = () => {
     try {
       setLoading(true);
       const response = await salaryAPI.getSalaryByMonth(selectedMonth);
-      setSalaryRecords(response.data.records || []);
+      console.log('Salary response:', response);
+      // Enhanced salary API returns { success, data: { employees, stats, period } }
+      const employees = response.data?.employees || [];
+      setSalaryRecords(employees);
     } catch (err) {
       console.error('Error fetching salary records:', err);
       setError(err.message || 'Failed to fetch salary records');
@@ -93,7 +96,7 @@ const BiometricSalaryManagement = () => {
     try {
       const [year, month] = selectedMonth.split('-');
       const response = await salaryAPI.getHolidays({ year, month });
-      setHolidays(response.data || []);
+      setHolidays(response.holidays || []);
     } catch (err) {
       console.error('Error fetching holidays:', err);
     }
@@ -105,7 +108,8 @@ const BiometricSalaryManagement = () => {
   const fetchStats = async () => {
     try {
       const response = await salaryAPI.getSalaryStats(selectedMonth);
-      setStats(response.data);
+      console.log('Stats response:', response);
+      setStats(response);
     } catch (err) {
       console.error('Error fetching stats:', err);
     }

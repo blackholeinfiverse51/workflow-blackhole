@@ -42,6 +42,7 @@ import { usePushNotifications } from "./hooks/usePushNotifications";
 import EMSDashboard from "./pages/EMSDashboard";
 import ProcurementDashboard from "./pages/ProcurementDashboard";
 import BiometricSalaryManagement from "./pages/BiometricSalaryManagement";
+import EnhancedSalaryDashboard from "./pages/EnhancedSalaryDashboard";
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -345,6 +346,14 @@ function AppContent() {
                         element={
                           <ProtectedRoute>
                             <BiometricSalaryManagement />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/enhanced-salary-dashboard"
+                        element={
+                          <ProtectedRoute>
+                            <EnhancedSalaryDashboard />
                           </ProtectedRoute>
                         }
                       />

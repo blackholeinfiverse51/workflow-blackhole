@@ -10,7 +10,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 // Create axios instance with default config
 const salaryAPI = axios.create({
-  baseURL: `${API_BASE_URL}/biometric-salary`,
+  baseURL: `${API_BASE_URL}/enhanced-salary`,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -19,12 +19,18 @@ const salaryAPI = axios.create({
 // Add auth token to requests
 salaryAPI.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('WorkflowToken'); // Changed from 'token' to 'WorkflowToken'
     if (token) {
       // Send token in both headers to support different middlewares
       config.headers.Authorization = `Bearer ${token}`;
       config.headers['x-auth-token'] = token; // server/middleware/auth.js expects this header
     }
+    
+    // If sending FormData, remove the default Content-Type to let browser set it with boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+    
     return config;
   },
   (error) => {
@@ -42,13 +48,8 @@ export const uploadBiometricFile = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await salaryAPI.post('/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        // Redundant but explicit: include x-auth-token for the upload request as well
-        ...(localStorage.getItem('token') ? { 'x-auth-token': localStorage.getItem('token') } : {}),
-      },
-    });
+    // The interceptor will handle Content-Type and auth headers
+    const response = await salaryAPI.post('/upload-biometric', formData);
 
     return response.data;
   } catch (error) {
@@ -63,7 +64,8 @@ export const uploadBiometricFile = async (file) => {
  */
 export const getSalaryByMonth = async (month) => {
   try {
-    const response = await salaryAPI.get(`/${month}`);
+    const [year, monthNum] = month.split('-');
+    const response = await salaryAPI.get(`/dashboard/${year}/${monthNum}`);
     return response.data;
   } catch (error) {
     throw error.response?.data || { message: 'Failed to fetch salary records' };
@@ -106,8 +108,18 @@ export const deleteSalaryRecord = async (id) => {
  */
 export const getSalaryStats = async (month) => {
   try {
-    const response = await salaryAPI.get(`/stats/${month}`);
-    return response.data;
+    const [year, monthNum] = month.split('-');
+    const response = await salaryAPI.get(`/dashboard/${year}/${monthNum}`);
+    // Extract stats from dashboard response
+    const data = response.data;
+    return {
+      totalSalary: data.summary?.totalPayroll || 0,
+      totalEmployees: data.summary?.totalEmployees || 0,
+      totalHours: data.summary?.totalHours || 0,
+      totalWFHDays: data.summary?.totalWFHDays || 0,
+      averageSalary: data.summary?.totalEmployees > 0 ? 
+        (data.summary?.totalPayroll / data.summary?.totalEmployees) : 0
+    };
   } catch (error) {
     throw error.response?.data || { message: 'Failed to fetch salary statistics' };
   }
@@ -120,8 +132,9 @@ export const getSalaryStats = async (month) => {
  */
 export const getHolidays = async (params = {}) => {
   try {
-    const response = await salaryAPI.get('/holidays', { params });
-    return response.data;
+    // Enhanced salary API doesn't have holidays endpoint yet
+    // Return empty array for now
+    return { holidays: [] };
   } catch (error) {
     throw error.response?.data || { message: 'Failed to fetch holidays' };
   }
