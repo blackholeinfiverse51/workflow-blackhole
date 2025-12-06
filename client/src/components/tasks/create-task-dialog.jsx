@@ -43,6 +43,7 @@ export function CreateTaskDialog({ open, onOpenChange, defaultAssignee = null })
   const [selectedUserTasks, setSelectedUserTasks] = useState([]);
   const [loadingUserTasks, setLoadingUserTasks] = useState(false);
   const [dependencySearch, setDependencySearch] = useState("");
+  const [dropdownSearchQuery, setDropdownSearchQuery] = useState("");
   const [filteredDependencies, setFilteredDependencies] = useState([]);
   const [showDependencyDropdown, setShowDependencyDropdown] = useState(false);
 
@@ -75,6 +76,7 @@ export function CreateTaskDialog({ open, onOpenChange, defaultAssignee = null })
       setSelectedUserTasks([]);
       setLoadingUserTasks(false);
       setDependencySearch("");
+      setDropdownSearchQuery("");
       setFilteredDependencies([]);
       setShowDependencyDropdown(false);
 
@@ -152,10 +154,11 @@ export function CreateTaskDialog({ open, onOpenChange, defaultAssignee = null })
   // Close dependency dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      const dependencyInput = document.getElementById("dependencies");
+      const dependencyButton = document.getElementById("dependencies");
       const dependencyDropdown = event.target.closest(".dependency-dropdown-container");
-      if (dependencyInput && !dependencyInput.contains(event.target) && !dependencyDropdown) {
+      if (dependencyButton && !dependencyButton.contains(event.target) && !dependencyDropdown) {
         setShowDependencyDropdown(false);
+        setDropdownSearchQuery("");
       }
     };
 
@@ -203,8 +206,7 @@ export function CreateTaskDialog({ open, onOpenChange, defaultAssignee = null })
 
   const handleDependencySearch = (e) => {
     const searchValue = e.target.value;
-    setDependencySearch(searchValue);
-    setShowDependencyDropdown(true);
+    setDropdownSearchQuery(searchValue);
     
     if (searchValue.trim() === "") {
       setFilteredDependencies(Array.isArray(tasks) ? tasks : []);
@@ -227,14 +229,8 @@ export function CreateTaskDialog({ open, onOpenChange, defaultAssignee = null })
           ? prev.dependencies.filter(id => id !== taskId)
           : [...prev.dependencies, taskId]
       }));
-      // Keep search open for multiple selections, but clear if deselecting
-      if (isAlreadySelected) {
-        // Keep dropdown open for further selections
-      } else {
-        // Clear search to allow selecting more
-        setDependencySearch("");
-        setFilteredDependencies(Array.isArray(tasks) ? tasks : []);
-      }
+      // Keep dropdown open for multiple selections
+      // Don't clear search so admin can continue searching
     }
   };
 
@@ -243,9 +239,6 @@ export function CreateTaskDialog({ open, onOpenChange, defaultAssignee = null })
       ...prev, 
       dependencies: prev.dependencies.filter(id => id !== taskId)
     }));
-    if (formData.dependencies.length === 1) {
-      setDependencySearch("");
-    }
   };
   const handleAssigneeSelect = async (user) => {
     setFormData((prev) => ({ ...prev, assignee: user._id }));
@@ -709,43 +702,61 @@ export function CreateTaskDialog({ open, onOpenChange, defaultAssignee = null })
               Dependencies
             </Label>
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-slate-500 z-10" />
-              <Input
+              <Button
+                type="button"
                 id="dependencies"
-                placeholder="Search tasks to add as dependencies..."
-                value={dependencySearch}
-                onChange={handleDependencySearch}
-                onFocus={() => {
-                  if (Array.isArray(tasks) && tasks.length > 0) {
-                    setFilteredDependencies(tasks);
-                    setShowDependencyDropdown(true);
-                  }
-                }}
                 onClick={() => {
                   if (Array.isArray(tasks) && tasks.length > 0) {
                     setFilteredDependencies(tasks);
-                    setShowDependencyDropdown(true);
+                    setShowDependencyDropdown(!showDependencyDropdown);
+                    setDropdownSearchQuery("");
                   }
                 }}
-                className="h-12 pl-12 pr-10 bg-white/10 dark:bg-slate-800/50 border-2 border-white/30 dark:border-slate-700 hover:border-white/50 dark:hover:border-slate-600 focus:border-secondary focus-visible:ring-4 focus-visible:ring-secondary/30 rounded-xl transition-all duration-300 text-base placeholder:text-gray-500 dark:placeholder:text-slate-500 text-gray-900 dark:text-slate-100 backdrop-blur-xl cursor-text"
-              />
-              {dependencySearch && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setDependencySearch("");
-                    setFilteredDependencies([]);
-                    setShowDependencyDropdown(false);
-                  }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-all"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
+                className="w-full h-12 px-4 bg-white/10 dark:bg-slate-800/50 border-2 border-white/30 dark:border-slate-700 hover:border-white/50 dark:hover:border-slate-600 focus:border-secondary focus:ring-4 focus:ring-secondary/30 rounded-xl transition-all duration-300 text-base font-medium text-left justify-start text-gray-900 dark:text-slate-100 backdrop-blur-xl"
+              >
+                <Search className="h-5 w-5 text-gray-400 dark:text-slate-500 mr-3" />
+                <span className="text-gray-500 dark:text-slate-500">
+                  {formData.dependencies.length > 0 
+                    ? `${formData.dependencies.length} task${formData.dependencies.length > 1 ? 's' : ''} selected`
+                    : "Click to select dependent tasks..."
+                  }
+                </span>
+                <svg className="ml-auto h-4 w-4 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </Button>
               {showDependencyDropdown && (
-                <div className="dependency-dropdown-container absolute z-50 w-full mt-1 bg-white/10 dark:bg-slate-900/95 backdrop-blur-xl border border-white/30 dark:border-slate-700 rounded-xl max-h-60 overflow-y-auto shadow-xl scrollbar-thin scrollbar-thumb-white/20 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent" style={{backdropFilter: 'blur(20px)'}}>
+                <div className="dependency-dropdown-container absolute z-50 w-full mt-1 bg-white/10 dark:bg-slate-900/95 backdrop-blur-xl border border-white/30 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden" style={{backdropFilter: 'blur(20px)'}}>
+                  {/* Search Bar Inside Dropdown */}
+                  <div className="p-3 border-b border-white/20 dark:border-slate-700 bg-white/5 dark:bg-slate-800/50">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-slate-500 z-10" />
+                      <Input
+                        placeholder="Search tasks by name or description..."
+                        value={dropdownSearchQuery}
+                        onChange={handleDependencySearch}
+                        className="h-10 pl-10 pr-8 bg-white/10 dark:bg-slate-800/50 border border-white/30 dark:border-slate-700 hover:border-white/50 dark:hover:border-slate-600 focus:border-secondary focus:ring-2 focus:ring-secondary/30 rounded-lg transition-all duration-200 text-sm placeholder:text-gray-500 dark:placeholder:text-slate-500 text-gray-900 dark:text-slate-100 backdrop-blur-xl"
+                        autoFocus
+                      />
+                      {dropdownSearchQuery && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setDropdownSearchQuery("");
+                            setFilteredDependencies(Array.isArray(tasks) ? tasks : []);
+                          }}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-all"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Tasks List */}
+                  <div className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent">
                   {filteredDependencies.length > 0 ? (
                     <>
                   {filteredDependencies.map((task) => {
@@ -790,13 +801,14 @@ export function CreateTaskDialog({ open, onOpenChange, defaultAssignee = null })
                   ) : (
                     <div className="p-4 text-center">
                       <p className="text-sm text-gray-500 dark:text-slate-400 font-medium">
-                        {dependencySearch 
-                          ? `No tasks found matching "${dependencySearch}"`
+                        {dropdownSearchQuery 
+                          ? `No tasks found matching "${dropdownSearchQuery}"`
                           : "No tasks available for dependencies"
                         }
                       </p>
                     </div>
                   )}
+                  </div>
                 </div>
               )}
             </div>
