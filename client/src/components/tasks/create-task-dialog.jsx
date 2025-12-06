@@ -721,7 +721,13 @@ export function CreateTaskDialog({ open, onOpenChange, defaultAssignee = null })
                     setShowDependencyDropdown(true);
                   }
                 }}
-                className="h-12 pl-12 pr-10 bg-white/10 dark:bg-slate-800/50 border-2 border-white/30 dark:border-slate-700 hover:border-white/50 dark:hover:border-slate-600 focus:border-secondary focus-visible:ring-4 focus-visible:ring-secondary/30 rounded-xl transition-all duration-300 text-base placeholder:text-gray-500 dark:placeholder:text-slate-500 text-gray-900 dark:text-slate-100 backdrop-blur-xl"
+                onClick={() => {
+                  if (Array.isArray(tasks) && tasks.length > 0) {
+                    setFilteredDependencies(tasks);
+                    setShowDependencyDropdown(true);
+                  }
+                }}
+                className="h-12 pl-12 pr-10 bg-white/10 dark:bg-slate-800/50 border-2 border-white/30 dark:border-slate-700 hover:border-white/50 dark:hover:border-slate-600 focus:border-secondary focus-visible:ring-4 focus-visible:ring-secondary/30 rounded-xl transition-all duration-300 text-base placeholder:text-gray-500 dark:placeholder:text-slate-500 text-gray-900 dark:text-slate-100 backdrop-blur-xl cursor-text"
               />
               {dependencySearch && (
                 <Button
@@ -738,8 +744,10 @@ export function CreateTaskDialog({ open, onOpenChange, defaultAssignee = null })
                   <X className="h-4 w-4" />
                 </Button>
               )}
-              {showDependencyDropdown && filteredDependencies.length > 0 && (
+              {showDependencyDropdown && (
                 <div className="dependency-dropdown-container absolute z-50 w-full mt-1 bg-white/10 dark:bg-slate-900/95 backdrop-blur-xl border border-white/30 dark:border-slate-700 rounded-xl max-h-60 overflow-y-auto shadow-xl scrollbar-thin scrollbar-thumb-white/20 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent" style={{backdropFilter: 'blur(20px)'}}>
+                  {filteredDependencies.length > 0 ? (
+                    <>
                   {filteredDependencies.map((task) => {
                     const isSelected = formData.dependencies.includes(task._id);
                     return (
@@ -778,6 +786,17 @@ export function CreateTaskDialog({ open, onOpenChange, defaultAssignee = null })
                       </div>
                     );
                   })}
+                    </>
+                  ) : (
+                    <div className="p-4 text-center">
+                      <p className="text-sm text-gray-500 dark:text-slate-400 font-medium">
+                        {dependencySearch 
+                          ? `No tasks found matching "${dependencySearch}"`
+                          : "No tasks available for dependencies"
+                        }
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
