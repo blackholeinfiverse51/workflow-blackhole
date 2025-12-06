@@ -41,7 +41,6 @@ import "react-toastify/dist/ReactToastify.css";
 import { usePushNotifications } from "./hooks/usePushNotifications";
 import EMSDashboard from "./pages/EMSDashboard";
 import ProcurementDashboard from "./pages/ProcurementDashboard";
-import BiometricSalaryManagement from "./pages/BiometricSalaryManagement";
 import EnhancedSalaryDashboard from "./pages/EnhancedSalaryDashboard";
 import BiometricAttendanceDashboard from "./pages/BiometricAttendanceDashboard";
 
@@ -346,7 +345,7 @@ function AppContent() {
                         path="/biometric-salary-management"
                         element={
                           <ProtectedRoute>
-                            <BiometricSalaryManagement />
+                            <BiometricAttendanceDashboard />
                           </ProtectedRoute>
                         }
                       />
