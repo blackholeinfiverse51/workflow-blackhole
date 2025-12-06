@@ -8,38 +8,483 @@ Initialized ComplianceAuditLogger
   'https://youtube.com',
   'https://github.com'
 ]
-objc[27374]: Class GNotificationCenterDelegate is implemented in both /Users/rishabh/Downloads/workflow-blackhole/server/node_modules/@img/sharp-libvips-darwin-arm64/lib/libvips-cpp.42.dylib (0x13c56da28) and /Users/rishabh/Downloads/workflow-blackhole/server/node_modules/canvas/build/Release/libgio-2.0.0.dylib (0x108a744b8). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
-(node:27374) [MONGOOSE] Warning: Duplicate schema index on {"approval_status":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+objc[24196]: Class GNotificationCenterDelegate is implemented in both /Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/@img/sharp-libvips-darwin-arm64/lib/libvips-cpp.42.dylib (0x13c56da28) and /Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/canvas/build/Release/libgio-2.0.0.dylib (0x108acc4b8). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+(node:24196) [MONGOOSE] Warning: Duplicate schema index on {"approval_status":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
 (Use `node --trace-warnings ...` to show where the warning was created)
 Server running on port 5001
 Auto-end day job: Enabled
 Max working hours: 8 hours
+🕐 Starting attendance persistence cron job (runs daily at 11:59 PM)...
+📅 Attendance persistence cron job scheduled (11:59 PM daily)
+📊 Syncing historical attendance data for the last 30 days...
+🔄 Syncing existing attendance records to DailyAttendance...
 OCR worker initialized successfully
 Connected to MongoDB
-✅ New client connected: MQ_elhBb_52L2Mc_AAAB
-👤 Socket MQ_elhBb_52L2Mc_AAAB joined room: user_681dc4612ae66516796d47da
-👤 Socket MQ_elhBb_52L2Mc_AAAB joined room: department_undefined
-✅ New client connected: HUN-jbCk94d0mzDFAAAD
-👤 Socket HUN-jbCk94d0mzDFAAAD joined room: user_681dc4612ae66516796d47da
-👤 Socket HUN-jbCk94d0mzDFAAAD joined room: department_undefined
-📊 Attendance Stats: {
-  total: 58,
-  present: 23,
-  absent: 35,
-  withAims: 12,
-  employeesCount: 58
+✅ Synced 0 historical attendance records
+✅ Server initialization complete
+❌ Auto end day job error: MongoServerSelectionError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+    at Topology.selectServer (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/sdam/topology.js:327:38)
+    at runNextTicks (node:internal/process/task_queues:64:5)
+    at process.processTimers (node:internal/timers:538:9)
+    at async tryOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:148:18)
+    at async executeOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:78:16)
+    at async FindCursor._initialize (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/find_cursor.js:62:26)
+    at async FindCursor.cursorInit (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:632:27)
+    at async FindCursor.fetchBatch (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:666:13)
+    at async FindCursor.next (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:342:17)
+    at async [Symbol.asyncIterator] (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:250:34)
+    at async FindCursor.toArray (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:422:26)
+    at async model.Query._find (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:2430:14)
+    at async model.Query.exec (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:4627:63)
+    at async Timeout.autoEndDayJob [as _onTimeout] (/Users/rishabh/Downloads/workflow-blackhole-main/server/index.js:386:30) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-01.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-02.eyjtrs9.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-p50cp2-shard-0',
+    maxElectionId: new ObjectId('7fffffff000000000000006d'),
+    maxSetVersion: 61,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+      at TLSSocket.<anonymous> (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connect.js:286:44)
+      at Object.onceWrapper (node:events:623:26)
+      at TLSSocket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+    errorLabelSet: Set(1) { 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: Error: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:121:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net'
+    }
+  }
 }
-📊 Attendance Stats: {
-  total: 58,
-  present: 23,
-  absent: 35,
-  withAims: 12,
-  employeesCount: 58
+❌ Auto end day job error: MongoServerSelectionError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+    at Topology.selectServer (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/sdam/topology.js:327:38)
+    at runNextTicks (node:internal/process/task_queues:64:5)
+    at process.processTimers (node:internal/timers:538:9)
+    at async tryOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:148:18)
+    at async executeOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:78:16)
+    at async FindCursor._initialize (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/find_cursor.js:62:26)
+    at async FindCursor.cursorInit (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:632:27)
+    at async FindCursor.fetchBatch (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:666:13)
+    at async FindCursor.next (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:342:17)
+    at async [Symbol.asyncIterator] (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:250:34)
+    at async FindCursor.toArray (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:422:26)
+    at async model.Query._find (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:2430:14)
+    at async model.Query.exec (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:4627:63)
+    at async Timeout.autoEndDayJob [as _onTimeout] (/Users/rishabh/Downloads/workflow-blackhole-main/server/index.js:386:30) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-01.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-02.eyjtrs9.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-p50cp2-shard-0',
+    maxElectionId: new ObjectId('7fffffff000000000000006d'),
+    maxSetVersion: 61,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+      at TLSSocket.<anonymous> (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connect.js:286:44)
+      at Object.onceWrapper (node:events:623:26)
+      at TLSSocket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+    errorLabelSet: Set(1) { 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: Error: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:121:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net'
+    }
+  }
 }
-📊 Attendance Stats: {
-  total: 58,
-  present: 23,
-  absent: 35,
-  withAims: 12,
-  employeesCount: 58
+❌ Auto end day job error: MongoServerSelectionError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+    at Topology.selectServer (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/sdam/topology.js:327:38)
+    at runNextTicks (node:internal/process/task_queues:64:5)
+    at process.processTimers (node:internal/timers:538:9)
+    at async tryOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:148:18)
+    at async executeOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:78:16)
+    at async FindCursor._initialize (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/find_cursor.js:62:26)
+    at async FindCursor.cursorInit (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:632:27)
+    at async FindCursor.fetchBatch (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:666:13)
+    at async FindCursor.next (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:342:17)
+    at async [Symbol.asyncIterator] (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:250:34)
+    at async FindCursor.toArray (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:422:26)
+    at async model.Query._find (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:2430:14)
+    at async model.Query.exec (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:4627:63)
+    at async Timeout.autoEndDayJob [as _onTimeout] (/Users/rishabh/Downloads/workflow-blackhole-main/server/index.js:386:30) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-01.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-02.eyjtrs9.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-p50cp2-shard-0',
+    maxElectionId: new ObjectId('7fffffff000000000000006d'),
+    maxSetVersion: 61,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+      at TLSSocket.<anonymous> (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connect.js:286:44)
+      at Object.onceWrapper (node:events:623:26)
+      at TLSSocket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+    errorLabelSet: Set(1) { 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: Error: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:121:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net'
+    }
+  }
+}
+❌ Auto end day job error: MongoServerSelectionError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+    at Topology.selectServer (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/sdam/topology.js:327:38)
+    at async tryOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:148:18)
+    at async executeOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:78:16)
+    at async FindCursor._initialize (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/find_cursor.js:62:26)
+    at async FindCursor.cursorInit (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:632:27)
+    at async FindCursor.fetchBatch (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:666:13)
+    at async FindCursor.next (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:342:17)
+    at async [Symbol.asyncIterator] (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:250:34)
+    at async FindCursor.toArray (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:422:26)
+    at async model.Query._find (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:2430:14)
+    at async model.Query.exec (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:4627:63)
+    at async Timeout.autoEndDayJob [as _onTimeout] (/Users/rishabh/Downloads/workflow-blackhole-main/server/index.js:386:30) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-01.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-02.eyjtrs9.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-p50cp2-shard-0',
+    maxElectionId: new ObjectId('7fffffff000000000000006d'),
+    maxSetVersion: 61,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+      at TLSSocket.<anonymous> (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connect.js:286:44)
+      at Object.onceWrapper (node:events:623:26)
+      at TLSSocket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+    errorLabelSet: Set(1) { 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: Error: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:121:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net'
+    }
+  }
+}
+❌ Auto end day job error: MongoServerSelectionError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+    at Topology.selectServer (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/sdam/topology.js:327:38)
+    at runNextTicks (node:internal/process/task_queues:64:5)
+    at process.processTimers (node:internal/timers:538:9)
+    at async tryOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:148:18)
+    at async executeOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:78:16)
+    at async FindCursor._initialize (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/find_cursor.js:62:26)
+    at async FindCursor.cursorInit (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:632:27)
+    at async FindCursor.fetchBatch (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:666:13)
+    at async FindCursor.next (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:342:17)
+    at async [Symbol.asyncIterator] (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:250:34)
+    at async FindCursor.toArray (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:422:26)
+    at async model.Query._find (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:2430:14)
+    at async model.Query.exec (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:4627:63)
+    at async Timeout.autoEndDayJob [as _onTimeout] (/Users/rishabh/Downloads/workflow-blackhole-main/server/index.js:386:30) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-01.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-02.eyjtrs9.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-p50cp2-shard-0',
+    maxElectionId: new ObjectId('7fffffff000000000000006d'),
+    maxSetVersion: 61,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+      at TLSSocket.<anonymous> (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connect.js:286:44)
+      at Object.onceWrapper (node:events:623:26)
+      at TLSSocket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+    errorLabelSet: Set(1) { 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: Error: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:121:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net'
+    }
+  }
+}
+❌ Auto end day job error: MongoServerSelectionError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+    at Topology.selectServer (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/sdam/topology.js:327:38)
+    at runNextTicks (node:internal/process/task_queues:64:5)
+    at process.processTimers (node:internal/timers:538:9)
+    at async tryOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:148:18)
+    at async executeOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:78:16)
+    at async FindCursor._initialize (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/find_cursor.js:62:26)
+    at async FindCursor.cursorInit (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:632:27)
+    at async FindCursor.fetchBatch (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:666:13)
+    at async FindCursor.next (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:342:17)
+    at async [Symbol.asyncIterator] (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:250:34)
+    at async FindCursor.toArray (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:422:26)
+    at async model.Query._find (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:2430:14)
+    at async model.Query.exec (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:4627:63)
+    at async Timeout.autoEndDayJob [as _onTimeout] (/Users/rishabh/Downloads/workflow-blackhole-main/server/index.js:386:30) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-01.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-02.eyjtrs9.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-p50cp2-shard-0',
+    maxElectionId: new ObjectId('7fffffff000000000000006d'),
+    maxSetVersion: 61,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+      at TLSSocket.<anonymous> (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connect.js:286:44)
+      at Object.onceWrapper (node:events:623:26)
+      at TLSSocket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+    errorLabelSet: Set(1) { 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: Error: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:121:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net'
+    }
+  }
+}
+❌ Auto end day job error: MongoServerSelectionError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+    at Topology.selectServer (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/sdam/topology.js:327:38)
+    at runNextTicks (node:internal/process/task_queues:64:5)
+    at process.processTimers (node:internal/timers:538:9)
+    at async tryOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:148:18)
+    at async executeOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:78:16)
+    at async FindCursor._initialize (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/find_cursor.js:62:26)
+    at async FindCursor.cursorInit (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:632:27)
+    at async FindCursor.fetchBatch (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:666:13)
+    at async FindCursor.next (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:342:17)
+    at async [Symbol.asyncIterator] (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:250:34)
+    at async FindCursor.toArray (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:422:26)
+    at async model.Query._find (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:2430:14)
+    at async model.Query.exec (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:4627:63)
+    at async Timeout.autoEndDayJob [as _onTimeout] (/Users/rishabh/Downloads/workflow-blackhole-main/server/index.js:386:30) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-01.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-02.eyjtrs9.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-p50cp2-shard-0',
+    maxElectionId: new ObjectId('7fffffff000000000000006d'),
+    maxSetVersion: 61,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+      at TLSSocket.<anonymous> (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connect.js:286:44)
+      at Object.onceWrapper (node:events:623:26)
+      at TLSSocket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+    errorLabelSet: Set(1) { 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: Error: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:121:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net'
+    }
+  }
+}
+❌ Auto end day job error: MongoServerSelectionError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+    at Topology.selectServer (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/sdam/topology.js:327:38)
+    at runNextTicks (node:internal/process/task_queues:64:5)
+    at process.processTimers (node:internal/timers:538:9)
+    at async tryOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:148:18)
+    at async executeOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:78:16)
+    at async FindCursor._initialize (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/find_cursor.js:62:26)
+    at async FindCursor.cursorInit (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:632:27)
+    at async FindCursor.fetchBatch (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:666:13)
+    at async FindCursor.next (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:342:17)
+    at async [Symbol.asyncIterator] (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:250:34)
+    at async FindCursor.toArray (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:422:26)
+    at async model.Query._find (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:2430:14)
+    at async model.Query.exec (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:4627:63)
+    at async Timeout.autoEndDayJob [as _onTimeout] (/Users/rishabh/Downloads/workflow-blackhole-main/server/index.js:386:30) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-01.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-02.eyjtrs9.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-p50cp2-shard-0',
+    maxElectionId: new ObjectId('7fffffff000000000000006d'),
+    maxSetVersion: 61,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+      at TLSSocket.<anonymous> (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connect.js:286:44)
+      at Object.onceWrapper (node:events:623:26)
+      at TLSSocket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+    errorLabelSet: Set(1) { 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: Error: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:121:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net'
+    }
+  }
+}
+❌ Auto end day job error: MongoServerSelectionError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+    at Topology.selectServer (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/sdam/topology.js:327:38)
+    at runNextTicks (node:internal/process/task_queues:64:5)
+    at process.processTimers (node:internal/timers:538:9)
+    at async tryOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:148:18)
+    at async executeOperation (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:78:16)
+    at async FindCursor._initialize (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/find_cursor.js:62:26)
+    at async FindCursor.cursorInit (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:632:27)
+    at async FindCursor.fetchBatch (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:666:13)
+    at async FindCursor.next (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:342:17)
+    at async [Symbol.asyncIterator] (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:250:34)
+    at async FindCursor.toArray (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:422:26)
+    at async model.Query._find (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:2430:14)
+    at async model.Query.exec (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/lib/query.js:4627:63)
+    at async Timeout.autoEndDayJob [as _onTimeout] (/Users/rishabh/Downloads/workflow-blackhole-main/server/index.js:386:30) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-01.eyjtrs9.mongodb.net:27017' => [ServerDescription],
+      'ac-a2qsdsr-shard-00-02.eyjtrs9.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-p50cp2-shard-0',
+    maxElectionId: new ObjectId('7fffffff000000000000006d'),
+    maxSetVersion: 61,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+      at TLSSocket.<anonymous> (/Users/rishabh/Downloads/workflow-blackhole-main/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connect.js:286:44)
+      at Object.onceWrapper (node:events:623:26)
+      at TLSSocket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+    errorLabelSet: Set(1) { 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: Error: getaddrinfo ENOTFOUND ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:121:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'ac-a2qsdsr-shard-00-00.eyjtrs9.mongodb.net'
+    }
+  }
 }

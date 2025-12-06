@@ -42,6 +42,13 @@ router.get('/locations', auth, adminAuth, async (req, res) => {
     const { date, department } = req.query;
     const { startOfDay, endOfDay, targetDate } = getDayRange(date);
 
+    console.log('📅 Fetching attendance for date:', {
+      requestedDate: date,
+      targetDate: targetDate.toISOString(),
+      startOfDay: startOfDay.toISOString(),
+      endOfDay: endOfDay.toISOString()
+    });
+
     // Build query
     let userQuery = { stillExist: 1 }; // Only active employees
     if (department && department !== 'all') {
@@ -70,6 +77,13 @@ router.get('/locations', auth, adminAuth, async (req, res) => {
     })
       .populate('user', 'name email avatar department employeeId role')
       .lean();
+
+    console.log('📊 Database Query Results:', {
+      usersFound: allUsers.length,
+      aimsRecords: aimsRecords.length,
+      attendanceRecords: attendanceRecords.length,
+      dateRange: { startOfDay, endOfDay }
+    });
 
     // Create maps for quick lookup
     const attendanceMap = new Map();
