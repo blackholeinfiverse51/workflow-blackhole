@@ -261,6 +261,13 @@ exports.uploadBiometricData = async (req, res) => {
             attendanceRecord.overtimeHours = hoursData.overtimeHours;
             attendanceRecord.isPresent = true;
             attendanceRecord.status = 'Present';
+            
+            // Set work location type - biometric data indicates office presence
+            if (!attendanceRecord.startDayTime) {
+              attendanceRecord.workLocationType = 'Office';
+            } else if (attendanceRecord.startDayTime && !attendanceRecord.workLocationType) {
+              attendanceRecord.workLocationType = 'Hybrid';
+            }
           }
 
           // Update verification method

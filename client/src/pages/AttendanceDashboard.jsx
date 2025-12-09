@@ -2,18 +2,20 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Users, UserCheck, UserX, Clock, Activity, MapPin, Upload, Download,
-  Search, BarChart3, Timer, Building, Wifi, Target, FileDown, User
+  Search, BarChart3, Timer, Building, Wifi, Target, FileDown, User, History
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { useAuth } from '../context/auth-context';
 import AttendanceGrid from '../components/attendance/AttendanceGrid';
 import BiometricUpload from '../components/attendance/BiometricUpload';
 import AttendanceStats from '../components/attendance/AttendanceStats';
 import LiveAttendanceMap from '../components/attendance/LiveAttendanceMap';
+import EmployeeAttendanceHistory from '../components/attendance/EmployeeAttendanceHistory';
 import api from '../lib/api';
 
 const AttendanceDashboard = () => {
@@ -32,6 +34,8 @@ const AttendanceDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedUserAvg, setSelectedUserAvg] = useState(null);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [selectedEmployeeForHistory, setSelectedEmployeeForHistory] = useState(null);
 
   const fetchDepartments = async () => {
     try {
@@ -291,6 +295,11 @@ const AttendanceDashboard = () => {
       console.error('Failed to fetch user average:', e);
       setSelectedUserAvg(null);
     }
+  };
+
+  const handleShowEmployeeHistory = (employee) => {
+    setSelectedEmployeeForHistory(employee);
+    setShowHistoryDialog(true);
   };
 
   return (
@@ -686,6 +695,10 @@ const AttendanceDashboard = () => {
               loading={loading}
               onRefresh={refreshDashboardData}
               onRowClick={(rec) => fetchUserAverage(rec.user?._id || rec._id)}
+              onHistoryClick={(rec) => handleShowEmployeeHistory({
+                userId: rec.user?._id || rec._id,
+                userName: rec.user?.name || 'Unknown'
+              })}
             />
             
             {/* Employee Names List - Filtered by Status */}
@@ -756,6 +769,21 @@ const AttendanceDashboard = () => {
                             </p>
                           )}
                         </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShowEmployeeHistory({
+                              userId: rec.user?._id || rec._id,
+                              userName: rec.user?.name || 'Unknown'
+                            });
+                          }}
+                          className="ml-2"
+                          title="View attendance history"
+                        >
+                          <History className="w-4 h-4" />
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -815,6 +843,25 @@ const AttendanceDashboard = () => {
           onClose={() => setShowUpload(false)}
           onSuccess={handleUploadSuccess}
         />
+
+        {/* Employee History Dialog */}
+        <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <History className="w-5 h-5" />
+                Employee Attendance History
+              </DialogTitle>
+            </DialogHeader>
+            {selectedEmployeeForHistory && (
+              <EmployeeAttendanceHistory
+                userId={selectedEmployeeForHistory.userId}
+                userName={selectedEmployeeForHistory.userName}
+                onClose={() => setShowHistoryDialog(false)}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </motion.div>
     </div>
   );

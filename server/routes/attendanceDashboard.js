@@ -790,8 +790,6 @@ router.get('/export/start-times', auth, adminAuth, async (req, res) => {
   }
 });
 
-module.exports = router;
- 
 // ========================================
 // 7. GET AVERAGE WORKING HOURS FOR A USER OVER RANGE
 // ========================================
@@ -838,4 +836,188 @@ router.get('/user-average', auth, adminAuth, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to compute average hours', details: error.message });
   }
 });
- 
+
+// ========================================
+// 8. GET EMPLOYEE ATTENDANCE HISTORY (DAY-WISE)
+// ========================================
+router.get('/employee-history/:userId', auth, adminAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { from, to, limit = 30 } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'userId is required' 
+      });
+    }
+
+    // Default to last 30 days if no date range provided
+    const endDate = to ? new Date(to) : new Date();
+    const startDate = from ? new Date(from) : new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Normalize to cover full days
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+
+    console.log('📅 Fetching employee history:', {
+      userId,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    });
+
+    // Fetch user info
+    const userInfo = await User.findById(userId)
+      .select('name email employeeId department avatar')
+      .populate('department', 'name color')
+      .lean();
+
+    if (!userInfo) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Fetch attendance records with AIMS integration
+    const attendanceRecords = await DailyAttendance.find({
+      user: new mongoose.Types.ObjectId(userId),
+      date: { $gte: startDate, $lte: endDate }
+    })
+      .sort({ date: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    // Fetch AIMS records for the same period
+    const aimsRecords = await Aim.find({
+      user: new mongoose.Types.ObjectId(userId),
+      date: { $gte: startDate, $lte: endDate },
+      aims: { $ne: 'Daily work objectives - to be updated' }
+    })
+      .sort({ date: -1 })
+      .lean();
+
+    // Create a map of AIMS by date
+    const aimsMap = new Map();
+    aimsRecords.forEach(aim => {
+      const dateKey = new Date(aim.date).toISOString().split('T')[0];
+      aimsMap.set(dateKey, aim);
+    });
+
+    // Build complete history with daily breakdown
+    const history = [];
+    const currentDate = new Date(endDate);
+    
+    while (currentDate >= startDate) {
+      const dateKey = currentDate.toISOString().split('T')[0];
+      const dayStart = new Date(currentDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(currentDate);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      // Find attendance record for this day
+      const attendance = attendanceRecords.find(record => {
+        const recordDate = new Date(record.date).toISOString().split('T')[0];
+        return recordDate === dateKey;
+      });
+
+      // Find AIMS for this day
+      const aim = aimsMap.get(dateKey);
+
+      // Determine presence status
+      const hasAim = !!aim;
+      const hasStartedDay = attendance && attendance.startDayTime;
+      const isPresent = hasAim || hasStartedDay;
+
+      // Get start time
+      let startTime = null;
+      if (aim && aim.workSessionInfo && aim.workSessionInfo.startDayTime) {
+        startTime = aim.workSessionInfo.startDayTime;
+      } else if (aim && aim.createdAt) {
+        startTime = aim.createdAt;
+      } else if (attendance && attendance.startDayTime) {
+        startTime = attendance.startDayTime;
+      }
+
+      const dayRecord = {
+        date: dateKey,
+        dayOfWeek: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
+        status: isPresent ? 'Present' : 'Absent',
+        isPresent,
+        hasAim,
+        startTime,
+        endTime: attendance?.endDayTime,
+        totalHours: attendance?.totalHoursWorked || 0,
+        regularHours: attendance?.regularHours || 0,
+        overtimeHours: attendance?.overtimeHours || 0,
+        workLocationType: attendance?.workLocationType || (hasAim ? 'Office' : null),
+        location: attendance?.startDayLocation,
+        aimDetails: aim ? {
+          aims: aim.aims,
+          completionStatus: aim.completionStatus,
+          progressPercentage: aim.progressPercentage || 0,
+          completionComment: aim.completionComment
+        } : null,
+        earnedAmount: attendance?.earnedAmount || 0,
+        notes: attendance?.employeeNotes || attendance?.systemNotes
+      };
+
+      history.push(dayRecord);
+      
+      // Move to previous day
+      currentDate.setDate(currentDate.getDate() - 1);
+      
+      // Stop if we've reached the limit
+      if (history.length >= parseInt(limit)) {
+        break;
+      }
+    }
+
+    // Calculate summary statistics
+    const totalDays = history.length;
+    const presentDays = history.filter(d => d.isPresent).length;
+    const absentDays = totalDays - presentDays;
+    const totalHoursWorked = history.reduce((sum, d) => sum + (d.totalHours || 0), 0);
+    const averageHours = presentDays > 0 ? Math.round((totalHoursWorked / presentDays) * 100) / 100 : 0;
+    const totalEarnings = history.reduce((sum, d) => sum + (d.earnedAmount || 0), 0);
+
+    console.log('📊 History Stats:', {
+      totalDays,
+      presentDays,
+      absentDays,
+      averageHours
+    });
+
+    res.json({
+      success: true,
+      data: {
+        user: userInfo,
+        history,
+        summary: {
+          period: {
+            from: startDate.toISOString().split('T')[0],
+            to: endDate.toISOString().split('T')[0]
+          },
+          totalDays,
+          presentDays,
+          absentDays,
+          attendancePercentage: totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0,
+          totalHoursWorked: Math.round(totalHoursWorked * 100) / 100,
+          averageHoursPerDay: averageHours,
+          totalEarnings: Math.round(totalEarnings * 100) / 100,
+          daysWithAims: history.filter(d => d.hasAim).length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get employee history error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch employee attendance history',
+      details: error.message
+    });
+  }
+});
+
+module.exports = router;

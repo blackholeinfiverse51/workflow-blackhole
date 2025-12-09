@@ -17,7 +17,8 @@ import {
   Eye,
   MoreVertical,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  History
 } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -25,7 +26,7 @@ import { Button } from '../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Progress } from '../ui/progress';
 
-const AttendanceGrid = ({ attendance, loading, onRefresh }) => {
+const AttendanceGrid = ({ attendance, loading, onRefresh, onHistoryClick }) => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   if (loading) {
@@ -281,17 +282,31 @@ const AttendanceGrid = ({ attendance, loading, onRefresh }) => {
                     )}
                   </div>
 
-                  {/* Action Button */}
-                  <div className="mt-4 pt-4 border-t border-gray-200">
+                  {/* Action Buttons */}
+                  <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
                     <Button
                       onClick={() => setSelectedEmployee(record)}
                       variant="ghost"
                       size="sm"
-                      className="w-full flex items-center justify-center gap-2 text-sm"
+                      className="flex-1 flex items-center justify-center gap-2 text-sm"
                     >
                       <Eye className="w-4 h-4" />
                       View Details
                     </Button>
+                    {onHistoryClick && (
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onHistoryClick(record);
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center justify-center gap-2 text-sm"
+                        title="View attendance history"
+                      >
+                        <History className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
 

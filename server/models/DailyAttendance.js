@@ -198,8 +198,23 @@ const dailyAttendanceSchema = new mongoose.Schema({
   // Work Location Type
   workLocationType: {
     type: String,
-    enum: ['Office', 'Home', 'Remote'],
-    default: 'Office'
+    enum: ['Office', 'Home', 'Remote', 'Hybrid'],
+    default: 'Office',
+    index: true
+  },
+  
+  // Separate hours tracking for office and remote work
+  officeHours: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 24
+  },
+  remoteHours: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 24
   },
   
   // Progress Completion Tracking
@@ -283,6 +298,27 @@ dailyAttendanceSchema.pre('save', function(next) {
     this.totalHoursWorked = Math.round(totalHours * 100) / 100;
     this.regularHours = Math.min(totalHours, 8);
     this.overtimeHours = Math.max(0, totalHours - 8);
+    
+    // Allocate hours based on work location type
+    if (this.workLocationType === 'Office') {
+      this.officeHours = this.totalHoursWorked;
+      this.remoteHours = 0;
+    } else if (this.workLocationType === 'Home' || this.workLocationType === 'Remote') {
+      this.remoteHours = this.totalHoursWorked;
+      this.officeHours = 0;
+    } else if (this.workLocationType === 'Hybrid') {
+      // For hybrid, check if biometric data exists (indicates office presence)
+      if (this.biometricTimeIn && this.biometricTimeOut) {
+        const biometricDiff = this.biometricTimeOut.getTime() - this.biometricTimeIn.getTime();
+        const biometricHours = Math.max(0, (biometricDiff / (1000 * 60 * 60)) - (this.breakTime / 60));
+        this.officeHours = Math.round(biometricHours * 100) / 100;
+        this.remoteHours = Math.round((this.totalHoursWorked - biometricHours) * 100) / 100;
+      } else {
+        // Default split for hybrid if no biometric data
+        this.officeHours = 0;
+        this.remoteHours = this.totalHoursWorked;
+      }
+    }
     
     // Set presence status
     this.isPresent = true;
@@ -429,6 +465,8 @@ dailyAttendanceSchema.statics.calculateMonthlySalary = async function(userId, ye
   const totalHours = attendanceRecords.reduce((sum, record) => sum + record.totalHoursWorked, 0);
   const totalEarnings = attendanceRecords.reduce((sum, record) => sum + record.earnedAmount, 0);
   const overtimeHours = attendanceRecords.reduce((sum, record) => sum + record.overtimeHours, 0);
+  const officeHours = attendanceRecords.reduce((sum, record) => sum + (record.officeHours || 0), 0);
+  const remoteHours = attendanceRecords.reduce((sum, record) => sum + (record.remoteHours || 0), 0);
   
   return {
     period: { year, month, startDate, endDate },
@@ -442,6 +480,8 @@ dailyAttendanceSchema.statics.calculateMonthlySalary = async function(userId, ye
       totalHours: Math.round(totalHours * 100) / 100,
       regularHours: Math.round((totalHours - overtimeHours) * 100) / 100,
       overtimeHours: Math.round(overtimeHours * 100) / 100,
+      officeHours: Math.round(officeHours * 100) / 100,
+      remoteHours: Math.round(remoteHours * 100) / 100,
       avgHoursPerDay: presentDays > 0 ? Math.round((totalHours / presentDays) * 100) / 100 : 0
     },
     salary: {
@@ -450,6 +490,32 @@ dailyAttendanceSchema.statics.calculateMonthlySalary = async function(userId, ye
       overtimePay: Math.round(overtimeHours * 32.25 * 1.5 * 100) / 100
     }
   };
+};
+
+// Method to get work location breakdown
+dailyAttendanceSchema.statics.getWorkLocationBreakdown = async function(userId, startDate, endDate) {
+  const matchCondition = {
+    user: userId,
+    date: { $gte: startDate, $lte: endDate },
+    isPresent: true
+  };
+  
+  const breakdown = await this.aggregate([
+    { $match: matchCondition },
+    {
+      $group: {
+        _id: '$workLocationType',
+        totalDays: { $sum: 1 },
+        totalHours: { $sum: '$totalHoursWorked' },
+        officeHours: { $sum: '$officeHours' },
+        remoteHours: { $sum: '$remoteHours' },
+        regularHours: { $sum: '$regularHours' },
+        overtimeHours: { $sum: '$overtimeHours' }
+      }
+    }
+  ]);
+  
+  return breakdown;
 };
 
 module.exports = mongoose.model('DailyAttendance', dailyAttendanceSchema);
