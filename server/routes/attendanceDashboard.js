@@ -1043,4 +1043,125 @@ router.get('/employee-history/:userId', auth, adminAuth, async (req, res) => {
   }
 });
 
+// ========================================
+// ADMIN: MANUAL SYNC FOR HISTORICAL DATA
+// ========================================
+/**
+ * @route   POST /api/attendance-dashboard/admin/sync-attendance
+ * @desc    Manually trigger sync for attendance records in a date range
+ * @access  Admin only
+ * @query   startDate, endDate (YYYY-MM-DD format)
+ */
+router.post('/admin/sync-attendance', auth, adminAuth, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'Start date and end date are required (format: YYYY-MM-DD)'
+      });
+    }
+
+    // Parse dates
+    const [startY, startM, startD] = startDate.split('-').map(Number);
+    const [endY, endM, endD] = endDate.split('-').map(Number);
+    
+    const syncStartDate = new Date(startY, startM - 1, startD);
+    syncStartDate.setHours(0, 0, 0, 0);
+    
+    const syncEndDate = new Date(endY, endM - 1, endD);
+    syncEndDate.setHours(23, 59, 59, 999);
+
+    // Use the forceSyncAttendanceRange function
+    const { forceSyncAttendanceRange } = require('../services/attendanceCronJobs');
+    const syncedCount = await forceSyncAttendanceRange(syncStartDate, syncEndDate);
+
+    res.json({
+      success: true,
+      message: 'Attendance sync completed',
+      data: {
+        dateRange: { startDate, endDate },
+        recordsProcessed: syncedCount,
+        syncTime: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Manual sync error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to sync attendance records',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @route   GET /api/attendance-dashboard/admin/sync-status
+ * @desc    Get sync status and statistics
+ * @access  Admin only
+ */
+router.get('/admin/sync-status', auth, adminAuth, async (req, res) => {
+  try {
+    const now = new Date();
+    
+    // Count records in both collections
+    const attendanceCount = await Attendance.countDocuments();
+    const dailyAttendanceCount = await DailyAttendance.countDocuments();
+    
+    // Check for unsynced records (in Attendance but not in DailyAttendance)
+    const unSyncedRecords = await Attendance.aggregate([
+      {
+        $lookup: {
+          from: 'dailyattendances',
+          let: { userId: '$user', date: '$date' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$user', '$$userId'] },
+                    {
+                      $and: [
+                        { $gte: ['$date', { $dateFromString: { dateString: { $dateToString: { date: '$$date', format: '%Y-%m-%d' } }, format: '%Y-%m-%d' } }] },
+                        { $lt: ['$date', { $dateFromString: { dateString: { $dateToString: { date: { $add: ['$$date', 86400000] }, format: '%Y-%m-%d' } }, format: '%Y-%m-%d' } }] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          as: 'dailyRecord'
+        }
+      },
+      { $match: { dailyRecord: { $size: 0 } } },
+      { $count: 'unsyncedCount' }
+    ]);
+
+    const unsyncedCount = unSyncedRecords.length > 0 ? unSyncedRecords[0].unsyncedCount : 0;
+
+    res.json({
+      success: true,
+      data: {
+        totalAttendanceRecords: attendanceCount,
+        totalDailyAttendanceRecords: dailyAttendanceCount,
+        unsyncedRecords: unsyncedCount,
+        syncPercentage: attendanceCount > 0 ? Math.round(((attendanceCount - unsyncedCount) / attendanceCount) * 100) : 100,
+        lastSyncTime: new Date().toISOString(),
+        message: unsyncedCount > 0 ? `⚠️ ${unsyncedCount} records pending sync` : '✅ All records synced'
+      }
+    });
+
+  } catch (error) {
+    console.error('Sync status error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get sync status',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;

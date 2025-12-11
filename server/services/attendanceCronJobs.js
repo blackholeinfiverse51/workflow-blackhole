@@ -159,21 +159,34 @@ function startAttendancePersistenceCron() {
 
 /**
  * Sync existing attendance records to DailyAttendance (run on server start)
+ * Enhanced to sync ALL available data and backfill historical records
  */
 async function syncExistingAttendance() {
   try {
     console.log('🔄 Syncing existing attendance records to DailyAttendance...');
     
-    // Get the last 30 days of attendance
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    thirtyDaysAgo.setHours(0, 0, 0, 0);
+    // Get the last 90 days of attendance (extended from 30 days)
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    ninetyDaysAgo.setHours(0, 0, 0, 0);
+    
+    // Get earliest attendance record date (for completeness)
+    const earliestAttendance = await Attendance.findOne()
+      .sort({ date: 1 })
+      .select('date')
+      .lean();
+    
+    const startDate = earliestAttendance ? new Date(earliestAttendance.date) : ninetyDaysAgo;
+    startDate.setHours(0, 0, 0, 0);
+    
+    console.log(`📅 Syncing attendance from ${startDate.toISOString().split('T')[0]} to today...`);
     
     const attendanceRecords = await Attendance.find({
-      date: { $gte: thirtyDaysAgo }
-    }).populate('user', 'name email');
+      date: { $gte: startDate }
+    }).populate('user', '_id name email');
 
     let syncedCount = 0;
+    let skippedCount = 0;
     
     for (const attendance of attendanceRecords) {
       if (!attendance.user) continue;
@@ -189,34 +202,128 @@ async function syncExistingAttendance() {
         date: { $gte: dateStart, $lt: dateEnd }
       });
       
-      if (!existing) {
-        // Calculate hours even if day is not ended (current time if not ended)
-        let hoursWorked = 0;
-        let endTime = attendance.endDayTime;
-        
-        if (attendance.startDayTime) {
-          // If no end-day, use current time for ongoing sessions
-          if (!endTime) {
-            const now = new Date();
-            const dayStart = new Date(attendance.date);
-            dayStart.setHours(0, 0, 0, 0);
-            const dayEnd = new Date(dayStart);
-            dayEnd.setDate(dayEnd.getDate() + 1);
-            
-            // Only count hours if still on same day
-            if (now < dayEnd) {
-              endTime = now;
-            } else {
-              // Use end of day if session spans multiple days
-              endTime = dayEnd;
-            }
-          }
+      if (existing) {
+        skippedCount++;
+        continue;
+      }
+      
+      // Calculate hours even if day is not ended (current time if not ended)
+      let hoursWorked = 0;
+      let endTime = attendance.endDayTime;
+      
+      if (attendance.startDayTime) {
+        // If no end-day, use current time for ongoing sessions
+        if (!endTime) {
+          const now = new Date();
+          const dayStart = new Date(attendance.date);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(dayStart);
+          dayEnd.setDate(dayEnd.getDate() + 1);
           
-          hoursWorked = (endTime - attendance.startDayTime) / (1000 * 60 * 60);
-          hoursWorked = Math.max(0, hoursWorked); // Ensure non-negative
+          // Only count hours if still on same day
+          if (now < dayEnd) {
+            endTime = now;
+          } else {
+            // Use end of day if session spans multiple days
+            endTime = dayEnd;
+          }
         }
         
-        // Create DailyAttendance record
+        hoursWorked = (endTime - attendance.startDayTime) / (1000 * 60 * 60);
+        hoursWorked = Math.max(0, hoursWorked); // Ensure non-negative
+      }
+      
+      // Create DailyAttendance record
+      const dailyRecord = new DailyAttendance({
+        user: attendance.user._id,
+        date: attendance.date,
+        startDayTime: attendance.startDayTime,
+        endDayTime: endTime,
+        totalHoursWorked: Math.round(hoursWorked * 100) / 100,
+        workLocationType: attendance.workLocationType || 'Office',
+        startDayLocation: attendance.startDayLocation,
+        endDayLocation: attendance.endDayLocation,
+        isPresent: !!attendance.startDayTime,
+        status: attendance.startDayTime ? 'Present' : 'Absent',
+        verificationMethod: attendance.verificationMethod || 'manual'
+      });
+      
+      await dailyRecord.save();
+      syncedCount++;
+    }
+    
+    console.log(`✅ Synced ${syncedCount} historical attendance records (${skippedCount} already synced)`);
+    
+  } catch (error) {
+    console.error('❌ Error syncing existing attendance:', error);
+  }
+}
+
+/**
+ * Force sync attendance records for a specific date range
+ * Can be called manually or on demand
+ */
+async function forceSyncAttendanceRange(startDate, endDate) {
+  try {
+    console.log(`🔄 Force syncing attendance from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}...`);
+    
+    const attendanceRecords = await Attendance.find({
+      date: { $gte: startDate, $lte: endDate }
+    }).populate('user', '_id name email');
+
+    let syncedCount = 0;
+    
+    for (const attendance of attendanceRecords) {
+      if (!attendance.user) continue;
+      
+      const dateStart = new Date(attendance.date);
+      dateStart.setHours(0, 0, 0, 0);
+      const dateEnd = new Date(dateStart);
+      dateEnd.setDate(dateEnd.getDate() + 1);
+      
+      // Check if DailyAttendance already exists
+      let existing = await DailyAttendance.findOne({
+        user: attendance.user._id,
+        date: { $gte: dateStart, $lt: dateEnd }
+      });
+      
+      // Calculate hours even if day is not ended
+      let hoursWorked = 0;
+      let endTime = attendance.endDayTime;
+      
+      if (attendance.startDayTime) {
+        if (!endTime) {
+          const now = new Date();
+          const dayStart = new Date(attendance.date);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(dayStart);
+          dayEnd.setDate(dayEnd.getDate() + 1);
+          
+          if (now < dayEnd) {
+            endTime = now;
+          } else {
+            endTime = dayEnd;
+          }
+        }
+        
+        hoursWorked = (endTime - attendance.startDayTime) / (1000 * 60 * 60);
+        hoursWorked = Math.max(0, hoursWorked);
+      }
+      
+      if (existing) {
+        // Update existing record
+        existing.startDayTime = attendance.startDayTime;
+        existing.endDayTime = endTime;
+        existing.totalHoursWorked = Math.round(hoursWorked * 100) / 100;
+        existing.workLocationType = attendance.workLocationType || 'Office';
+        existing.startDayLocation = attendance.startDayLocation;
+        existing.endDayLocation = attendance.endDayLocation;
+        existing.isPresent = !!attendance.startDayTime;
+        existing.status = attendance.startDayTime ? 'Present' : 'Absent';
+        existing.verificationMethod = attendance.verificationMethod || 'manual';
+        await existing.save();
+      } else {
+        // Create new record
         const dailyRecord = new DailyAttendance({
           user: attendance.user._id,
           date: attendance.date,
@@ -230,20 +337,23 @@ async function syncExistingAttendance() {
           status: attendance.startDayTime ? 'Present' : 'Absent',
           verificationMethod: attendance.verificationMethod || 'manual'
         });
-        
         await dailyRecord.save();
-        syncedCount++;
       }
+      
+      syncedCount++;
     }
     
-    console.log(`✅ Synced ${syncedCount} historical attendance records`);
+    console.log(`✅ Force sync complete: ${syncedCount} records processed`);
+    return syncedCount;
     
   } catch (error) {
-    console.error('❌ Error syncing existing attendance:', error);
+    console.error('❌ Error in force sync:', error);
+    throw error;
   }
 }
 
 module.exports = {
   startAttendancePersistenceCron,
-  syncExistingAttendance
+  syncExistingAttendance,
+  forceSyncAttendanceRange
 };
