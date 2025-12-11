@@ -8,6 +8,7 @@ const User = require('../models/User');
 const Department = require('../models/Department');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
+const { forceSyncAttendanceRange } = require('../services/attendanceCronJobs');
 
 // ========================================
 // 1. GET LIVE ATTENDANCE WITH LOCATIONS AND AIMS
@@ -1073,8 +1074,6 @@ router.post('/admin/sync-attendance', auth, adminAuth, async (req, res) => {
     const syncEndDate = new Date(endY, endM - 1, endD);
     syncEndDate.setHours(23, 59, 59, 999);
 
-    // Use the forceSyncAttendanceRange function
-    const { forceSyncAttendanceRange } = require('../services/attendanceCronJobs');
     const syncedCount = await forceSyncAttendanceRange(syncStartDate, syncEndDate);
 
     res.json({
@@ -1159,6 +1158,168 @@ router.get('/admin/sync-status', auth, adminAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to get sync status',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @route   GET /api/attendance-dashboard/admin/check-date-data
+ * @desc    Check what data exists for a specific date
+ * @access  Admin only
+ * @query   date (YYYY-MM-DD format)
+ */
+router.get('/admin/check-date-data', auth, adminAuth, async (req, res) => {
+  try {
+    const { date } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        error: 'Date parameter required (format: YYYY-MM-DD)'
+      });
+    }
+
+    const [y, m, d] = date.split('-').map(Number);
+    const dateStart = new Date(y, m - 1, d);
+    dateStart.setHours(0, 0, 0, 0);
+    const dateEnd = new Date(dateStart);
+    dateEnd.setDate(dateEnd.getDate() + 1);
+
+    // Check both collections
+    const dailyCount = await DailyAttendance.countDocuments({
+      date: { $gte: dateStart, $lt: dateEnd }
+    });
+
+    const attendanceCount = await Attendance.countDocuments({
+      date: { $gte: dateStart, $lt: dateEnd }
+    });
+
+    const aimsCount = await Aim.countDocuments({
+      date: { $gte: dateStart, $lt: dateEnd }
+    });
+
+    // Get sample records
+    const dailySample = await DailyAttendance.find({
+      date: { $gte: dateStart, $lt: dateEnd }
+    }).select('user status isPresent startDayTime endDayTime totalHoursWorked').limit(3).lean();
+
+    const attendanceSample = await Attendance.find({
+      date: { $gte: dateStart, $lt: dateEnd }
+    }).select('user status startDayTime endDayTime totalHoursWorked').limit(3).lean();
+
+    res.json({
+      success: true,
+      data: {
+        date: date,
+        dateRange: {
+          start: dateStart.toISOString(),
+          end: dateEnd.toISOString()
+        },
+        counts: {
+          dailyAttendanceRecords: dailyCount,
+          attendanceRecords: attendanceCount,
+          aimsRecords: aimsCount
+        },
+        samples: {
+          dailyAttendance: dailySample,
+          attendance: attendanceSample
+        },
+        nextAction: attendanceCount > 0 && dailyCount === 0 ? 'Run sync endpoint' : 'Data available'
+      }
+    });
+
+  } catch (error) {
+    console.error('Check date data error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check date data',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @route   POST /api/attendance-dashboard/admin/sync-and-fetch
+ * @desc    Sync historical data and immediately fetch for date
+ * @access  Admin only
+ * @query   date (YYYY-MM-DD format)
+ */
+router.post('/admin/sync-and-fetch', auth, adminAuth, async (req, res) => {
+  try {
+    const { date } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        error: 'Date parameter required (format: YYYY-MM-DD)'
+      });
+    }
+
+    const [y, m, d] = date.split('-').map(Number);
+    const syncDate = new Date(y, m - 1, d);
+    syncDate.setHours(0, 0, 0, 0);
+    
+    const syncEndDate = new Date(syncDate);
+    syncEndDate.setHours(23, 59, 59, 999);
+
+    console.log(`🔄 Syncing data for ${date}...`);
+    
+    // Trigger sync for this specific date
+    const syncedCount = await forceSyncAttendanceRange(syncDate, syncEndDate);
+
+    // Now fetch the attendance data for this date
+    const { startOfDay, endOfDay } = {
+      startOfDay: syncDate,
+      endOfDay: syncEndDate
+    };
+
+    const allUsers = await User.find({ stillExist: 1 })
+      .select('_id name email avatar department employeeId role')
+      .populate('department', 'name color')
+      .lean();
+
+    const dailyAttendanceRecords = await DailyAttendance.find({
+      date: { $gte: startOfDay, $lte: endOfDay },
+      user: { $in: allUsers.map(u => u._id) }
+    }).populate('user', 'name email avatar department employeeId role').lean();
+
+    const attendanceRecords = await Attendance.find({
+      date: { $gte: startOfDay, $lte: endOfDay },
+      user: { $in: allUsers.map(u => u._id) }
+    }).populate('user', 'name email avatar department employeeId role').lean();
+
+    const aimsRecords = await Aim.find({
+      date: { $gte: startOfDay, $lte: endOfDay },
+      user: { $in: allUsers.map(u => u._id) },
+      aims: { $ne: 'Daily work objectives - to be updated' }
+    }).populate('user', 'name email').lean();
+
+    res.json({
+      success: true,
+      data: {
+        syncResults: {
+          recordsProcessed: syncedCount,
+          message: `✅ Synced ${syncedCount} records for ${date}`
+        },
+        queryResults: {
+          totalUsers: allUsers.length,
+          dailyAttendanceRecords: dailyAttendanceRecords.length,
+          attendanceRecords: attendanceRecords.length,
+          aimsRecords: aimsRecords.length
+        },
+        sample: {
+          dailyAttendance: dailyAttendanceRecords.slice(0, 2),
+          attendance: attendanceRecords.slice(0, 2)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Sync and fetch error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to sync and fetch data',
       details: error.message
     });
   }
