@@ -2,6 +2,8 @@ const DailyAttendance = require('../models/DailyAttendance');
 const EmployeeMaster = require('../models/EmployeeMaster');
 const User = require('../models/User');
 const Department = require('../models/Department');
+const PublicHoliday = require('../models/PublicHoliday');
+const PaidLeaveConfig = require('../models/PaidLeaveConfig');
 const mongoose = require('mongoose');
 const moment = require('moment');
 
@@ -199,6 +201,34 @@ class AttendanceSalaryService {
         summary.bonuses += record.bonusAmount || 0;
         summary.deductions += record.deductionAmount || 0;
       }
+
+      // Add paid leave hours
+      const paidLeaveHours = await PaidLeaveConfig.getTotalPaidHours(
+        userId,
+        new Date(startDate),
+        new Date(endDate)
+      );
+      
+      summary.paidLeaveHours = paidLeaveHours;
+      summary.totalHours += paidLeaveHours;
+      summary.regularHours += paidLeaveHours;
+
+      // Add public holiday hours
+      const user = await User.findById(userId).populate('department');
+      const publicHolidays = await PublicHoliday.getHolidaysInRange(
+        new Date(startDate),
+        new Date(endDate),
+        user?.department?._id
+      );
+      
+      const paidPublicHolidays = publicHolidays.filter(h => h.isPaidLeave);
+      const publicHolidayHours = paidPublicHolidays.length * standardHours;
+      
+      summary.publicHolidayDays = paidPublicHolidays.length;
+      summary.publicHolidayHours = publicHolidayHours;
+      summary.totalHours += publicHolidayHours;
+      summary.regularHours += publicHolidayHours;
+      summary.presentDays += paidPublicHolidays.length;
 
       // Calculate salary based on salary type
       if (employeeMaster) {

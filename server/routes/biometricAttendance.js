@@ -11,6 +11,8 @@ const Department = require('../models/Department');
 const DailyAttendance = require('../models/DailyAttendance');
 const BiometricPunch = require('../models/BiometricPunch');
 const BiometricUpload = require('../models/BiometricUpload');
+const PublicHoliday = require('../models/PublicHoliday');
+const PaidLeaveConfig = require('../models/PaidLeaveConfig');
 const XLSX = require('xlsx');
 
 // Configure multer for file uploads
@@ -619,4 +621,377 @@ router.get('/users', auth, async (req, res) => {
   }
 });
 
+// ==================== PUBLIC HOLIDAYS MANAGEMENT ====================
+
+// Get all public holidays
+router.get('/public-holidays', auth, async (req, res) => {
+  try {
+    const { startDate, endDate, departmentId } = req.query;
+    
+    let holidays;
+    if (startDate && endDate) {
+      holidays = await PublicHoliday.getHolidaysInRange(
+        new Date(startDate),
+        new Date(endDate),
+        departmentId
+      );
+    } else {
+      const query = {};
+      if (departmentId) {
+        query.$or = [
+          { departments: { $size: 0 } },
+          { departments: departmentId }
+        ];
+      }
+      holidays = await PublicHoliday.find(query)
+        .populate('departments', 'name')
+        .populate('createdBy', 'name email')
+        .sort({ date: 1 });
+    }
+
+    res.json({
+      success: true,
+      data: holidays
+    });
+  } catch (error) {
+    console.error('❌ Get public holidays error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Add public holiday
+router.post('/public-holidays', auth, async (req, res) => {
+  try {
+    const { date, name, description, isPaidLeave, isOptional, departments } = req.body;
+
+    const holiday = new PublicHoliday({
+      date: new Date(date),
+      name,
+      description,
+      isPaidLeave: isPaidLeave !== undefined ? isPaidLeave : true,
+      isOptional: isOptional || false,
+      departments: departments || [],
+      createdBy: req.user.id
+    });
+
+    await holiday.save();
+
+    res.json({
+      success: true,
+      message: 'Public holiday added successfully',
+      data: holiday
+    });
+  } catch (error) {
+    console.error('❌ Add public holiday error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Update public holiday
+router.put('/public-holidays/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date, name, description, isPaidLeave, isOptional, departments } = req.body;
+
+    const holiday = await PublicHoliday.findByIdAndUpdate(
+      id,
+      {
+        date: date ? new Date(date) : undefined,
+        name,
+        description,
+        isPaidLeave,
+        isOptional,
+        departments,
+        updatedAt: Date.now()
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!holiday) {
+      return res.status(404).json({
+        success: false,
+        error: 'Holiday not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Public holiday updated successfully',
+      data: holiday
+    });
+  } catch (error) {
+    console.error('❌ Update public holiday error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Delete public holiday
+router.delete('/public-holidays/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const holiday = await PublicHoliday.findByIdAndDelete(id);
+
+    if (!holiday) {
+      return res.status(404).json({
+        success: false,
+        error: 'Holiday not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Public holiday deleted successfully'
+    });
+  } catch (error) {
+    console.error('❌ Delete public holiday error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ==================== PAID LEAVE MANAGEMENT ====================
+
+// Get paid leaves
+router.get('/paid-leaves', auth, async (req, res) => {
+  try {
+    const { userId, startDate, endDate } = req.query;
+    
+    const query = {};
+    if (userId) query.user = userId;
+    if (startDate && endDate) {
+      query.date = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    }
+
+    const leaves = await PaidLeaveConfig.find(query)
+      .populate('user', 'name email department')
+      .populate('approvedBy', 'name email')
+      .populate('createdBy', 'name email')
+      .sort({ date: -1 });
+
+    res.json({
+      success: true,
+      data: leaves
+    });
+  } catch (error) {
+    console.error('❌ Get paid leaves error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Add paid leave
+router.post('/paid-leaves', auth, async (req, res) => {
+  try {
+    const { userId, date, hours, leaveType, reason, countAsWorking, remarks } = req.body;
+
+    // Check if leave already exists for this user and date
+    const existingLeave = await PaidLeaveConfig.findOne({
+      user: userId,
+      date: new Date(date)
+    });
+
+    if (existingLeave) {
+      return res.status(400).json({
+        success: false,
+        error: 'Paid leave already exists for this date'
+      });
+    }
+
+    const leave = new PaidLeaveConfig({
+      user: userId,
+      date: new Date(date),
+      hours: hours || 8,
+      leaveType: leaveType || 'Paid Leave',
+      reason,
+      countAsWorking: countAsWorking !== undefined ? countAsWorking : true,
+      isApproved: true,
+      approvedBy: req.user.id,
+      createdBy: req.user.id,
+      remarks
+    });
+
+    await leave.save();
+
+    res.json({
+      success: true,
+      message: 'Paid leave added successfully',
+      data: leave
+    });
+  } catch (error) {
+    console.error('❌ Add paid leave error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Update paid leave
+router.put('/paid-leaves/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { hours, leaveType, reason, countAsWorking, isApproved, remarks } = req.body;
+
+    const leave = await PaidLeaveConfig.findByIdAndUpdate(
+      id,
+      {
+        hours,
+        leaveType,
+        reason,
+        countAsWorking,
+        isApproved,
+        remarks,
+        updatedAt: Date.now()
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!leave) {
+      return res.status(404).json({
+        success: false,
+        error: 'Paid leave not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Paid leave updated successfully',
+      data: leave
+    });
+  } catch (error) {
+    console.error('❌ Update paid leave error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Delete paid leave
+router.delete('/paid-leaves/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const leave = await PaidLeaveConfig.findByIdAndDelete(id);
+
+    if (!leave) {
+      return res.status(404).json({
+        success: false,
+        error: 'Paid leave not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Paid leave deleted successfully'
+    });
+  } catch (error) {
+    console.error('❌ Delete paid leave error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ==================== EMPLOYEE HOURLY RATE MANAGEMENT ====================
+
+// Update employee hourly rate
+router.put('/employee-hourly-rate/:userId', auth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { hourlyRate, monthlySalary, salaryType } = req.body;
+
+    let employee = await EmployeeMaster.findOne({ user: userId });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        error: 'Employee master record not found'
+      });
+    }
+
+    if (hourlyRate !== undefined) employee.hourlyRate = hourlyRate;
+    if (monthlySalary !== undefined) employee.monthlySalary = monthlySalary;
+    if (salaryType) employee.salaryType = salaryType;
+
+    await employee.save();
+
+    res.json({
+      success: true,
+      message: 'Employee hourly rate updated successfully',
+      data: {
+        hourlyRate: employee.hourlyRate,
+        monthlySalary: employee.monthlySalary,
+        salaryType: employee.salaryType,
+        calculatedHourlyRate: employee.calculatedHourlyRate
+      }
+    });
+  } catch (error) {
+    console.error('❌ Update hourly rate error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Get employee hourly rates
+router.get('/employee-hourly-rates', auth, async (req, res) => {
+  try {
+    const { departmentId } = req.query;
+    const query = { isActive: true };
+    
+    if (departmentId) {
+      query.department = departmentId;
+    }
+
+    const employees = await EmployeeMaster.find(query)
+      .populate('user', 'name email')
+      .populate('department', 'name')
+      .select('user employeeId name hourlyRate monthlySalary salaryType standardShiftHours standardWorkingDays')
+      .sort({ name: 1 });
+
+    const data = employees.map(emp => ({
+      userId: emp.user?._id,
+      employeeId: emp.employeeId,
+      name: emp.name,
+      email: emp.user?.email,
+      department: emp.department?.name,
+      hourlyRate: emp.hourlyRate,
+      monthlySalary: emp.monthlySalary,
+      salaryType: emp.salaryType,
+      calculatedHourlyRate: emp.calculatedHourlyRate,
+      standardShiftHours: emp.standardShiftHours,
+      standardWorkingDays: emp.standardWorkingDays
+    }));
+
+    res.json({
+      success: true,
+      data
+    });
+  } catch (error) {
+    console.error('❌ Get hourly rates error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
+

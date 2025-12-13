@@ -377,7 +377,7 @@ app.use('/api/alerts', alertRoutes);
 app.use('/api/ems', emsRoutes); // EMS automation routes
 app.use('/api/procurement', procurementRoutes); // Procurement routes
 app.use('/api/chatbot', chatbotRoutes); // Admin chatbot routes
-app.use('/api/biometric-attendance', biometricAttendanceRoutes); // Biometric attendance and salary management routes
+app.use('/api/biometric', biometricAttendanceRoutes); // Biometric attendance and salary management routes
 app.use('/api/hourly-salary', hourlyBasedSalaryRoutes); // Hourly-based salary management routes
 
 // app.use('/api/new/ai',aiRoutePy)

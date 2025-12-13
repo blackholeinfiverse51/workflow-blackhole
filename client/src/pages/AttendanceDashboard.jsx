@@ -85,14 +85,6 @@ const AttendanceDashboard = () => {
         params.date = selectedDate;
       }
 
-      console.log('🔍 Dashboard Request Debug:', {
-        endpoint,
-        selectedDate,
-        params,
-        viewMode,
-        timestamp: new Date().toISOString()
-      });
-
       const response = await api.get(endpoint, { params });
 
       if (response.data && (response.data.employees || response.data.success)) {
