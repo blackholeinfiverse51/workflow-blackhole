@@ -224,7 +224,7 @@ export function WorkHoursManager({ employee }) {
       );
       
       console.log('Pause successful, updating local session state...');
-
+      
       // Optimistically update local session so UI changes immediately
       setWorkSession(prev => {
         if (!prev) return prev;
@@ -488,7 +488,7 @@ export function WorkHoursManager({ employee }) {
     if (!workSession || !workSession.startTime) {
       return { hours: 0, minutes: 0, percentage: 0 };
     }
-
+    
     const startTime = new Date(workSession.startTime);
     // For completed sessions, stop at endTime; otherwise use current time
     const referenceTime =
@@ -513,7 +513,7 @@ export function WorkHoursManager({ employee }) {
     const totalHours = activeMinutes / 60;
     const targetHours = workSession.targetHours || 8;
     const percentage = Math.min((totalHours / targetHours) * 100, 100);
-
+    
     return {
       hours: Math.floor(activeMinutes / 60),
       minutes: activeMinutes % 60,

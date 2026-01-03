@@ -441,69 +441,78 @@ router.post('/end-day/:userId', auth, async (req, res) => {
   }
 });
 
-// Auto end day for employees who exceed maximum working hours
+// Auto end day endpoint - DISABLED
+// Work days now continue indefinitely until user manually ends them
 router.post('/auto-end-day', auth, async (req, res) => {
-  try {
-    if (!AUTO_END_DAY_ENABLED) {
-      return res.status(400).json({ error: 'Auto end day is disabled' });
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Find all attendance records that started today but haven't ended
-    const activeAttendance = await Attendance.find({
-      date: today,
-      startDayTime: { $exists: true },
-      endDayTime: { $exists: false }
-    }).populate('user', 'name email');
-
-    const autoEndedUsers = [];
-    const currentTime = new Date();
-
-    for (const record of activeAttendance) {
-      const hoursWorked = (currentTime - record.startDayTime) / (1000 * 60 * 60);
-
-      if (hoursWorked >= MAX_WORKING_HOURS) {
-        // Auto end the day
-        record.endDayTime = currentTime;
-        record.employeeNotes = `Auto-ended after ${MAX_WORKING_HOURS} hours of work`;
-        record.autoEnded = true;
-
-        await record.save();
-
-        autoEndedUsers.push({
-          userId: record.user._id,
-          userName: record.user.name,
-          hoursWorked: Math.round(hoursWorked * 100) / 100,
-          autoEndTime: currentTime
-        });
-
-        // Emit socket event
-        if (req.io) {
-          req.io.emit('attendance:auto-day-ended', {
-            userId: record.user._id,
-            userName: record.user.name,
-            endTime: currentTime,
-            hoursWorked: record.hoursWorked,
-            reason: 'Exceeded maximum working hours'
-          });
-        }
-      }
-    }
-
-    res.json({
-      success: true,
-      message: `Auto-ended ${autoEndedUsers.length} user(s)`,
-      autoEndedUsers,
-      maxWorkingHours: MAX_WORKING_HOURS
-    });
-
-  } catch (error) {
-    console.error('Auto end day error:', error);
-    res.status(500).json({ error: 'Failed to auto end day' });
-  }
+  return res.status(400).json({ 
+    error: 'Auto end day is permanently disabled. Work days continue until manually ended by the user.',
+    code: 'AUTO_END_DISABLED'
+  });
 });
+
+// OLD AUTO-END DAY CODE (DISABLED):
+// router.post('/auto-end-day', auth, async (req, res) => {
+//   try {
+//     if (!AUTO_END_DAY_ENABLED) {
+//       return res.status(400).json({ error: 'Auto end day is disabled' });
+//     }
+
+//     const today = new Date();
+//     today.setHours(0, 0, 0, 0);
+
+//     // Find all attendance records that started today but haven't ended
+//     const activeAttendance = await Attendance.find({
+//       date: today,
+//       startDayTime: { $exists: true },
+//       endDayTime: { $exists: false }
+//     }).populate('user', 'name email');
+
+//     const autoEndedUsers = [];
+//     const currentTime = new Date();
+
+//     for (const record of activeAttendance) {
+//       const hoursWorked = (currentTime - record.startDayTime) / (1000 * 60 * 60);
+
+//       if (hoursWorked >= MAX_WORKING_HOURS) {
+//         // Auto end the day
+//         record.endDayTime = currentTime;
+//         record.employeeNotes = `Auto-ended after ${MAX_WORKING_HOURS} hours of work`;
+//         record.autoEnded = true;
+
+//         await record.save();
+
+//         autoEndedUsers.push({
+//           userId: record.user._id,
+//           userName: record.user.name,
+//           hoursWorked: Math.round(hoursWorked * 100) / 100,
+//           autoEndTime: currentTime
+//         });
+
+//         // Emit socket event
+//         if (req.io) {
+//           req.io.emit('attendance:auto-day-ended', {
+//             userId: record.user._id,
+//             userName: record.user.name,
+//             endTime: currentTime,
+//             hoursWorked: record.hoursWorked,
+//             reason: 'Exceeded maximum working hours'
+//           });
+//         }
+//       }
+//     }
+
+//     res.json({
+//       success: true,
+//       message: `Auto-ended ${autoEndedUsers.length} user(s)`,
+//       autoEndedUsers,
+//       maxWorkingHours: MAX_WORKING_HOURS
+//     });
+
+//   } catch (error) {
+//     console.error('Auto end day error:', error);
+//     res.status(500).json({ error: 'Failed to auto end day' });
+//   }
+// });
 
 // Get attendance analytics
 router.get('/analytics', auth, async (req, res) => {

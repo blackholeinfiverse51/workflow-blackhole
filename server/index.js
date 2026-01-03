@@ -384,84 +384,85 @@ app.use('/api/hourly-salary', hourlyBasedSalaryRoutes); // Hourly-based salary m
 
 
 
-// Auto-end day background job
-const Attendance = require('./models/Attendance');
-const DailyAttendance = require('./models/DailyAttendance');
+// Auto-end day background job - DISABLED
+// Work days now continue indefinitely until user manually ends them
+// const Attendance = require('./models/Attendance');
+// const DailyAttendance = require('./models/DailyAttendance');
 
-const autoEndDayJob = async () => {
-  try {
-    const AUTO_END_DAY_ENABLED = process.env.AUTO_END_DAY_ENABLED === 'true';
-    const MAX_WORKING_HOURS = parseInt(process.env.MAX_WORKING_HOURS) || 8;
+// const autoEndDayJob = async () => {
+//   try {
+//     const AUTO_END_DAY_ENABLED = process.env.AUTO_END_DAY_ENABLED === 'true';
+//     const MAX_WORKING_HOURS = parseInt(process.env.MAX_WORKING_HOURS) || 8;
 
-    if (!AUTO_END_DAY_ENABLED) return;
+//     if (!AUTO_END_DAY_ENABLED) return;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+//     const today = new Date();
+//     today.setHours(0, 0, 0, 0);
 
-    // Find all attendance records that started today but haven't ended
-    const activeAttendance = await Attendance.find({
-      date: today,
-      startDayTime: { $exists: true },
-      endDayTime: { $exists: false }
-    }).populate('user', 'name email');
+//     // Find all attendance records that started today but haven't ended
+//     const activeAttendance = await Attendance.find({
+//       date: today,
+//       startDayTime: { $exists: true },
+//       endDayTime: { $exists: false }
+//     }).populate('user', 'name email');
 
-    const currentTime = new Date();
+//     const currentTime = new Date();
 
-    for (const record of activeAttendance) {
-      const hoursWorked = (currentTime - record.startDayTime) / (1000 * 60 * 60);
+//     for (const record of activeAttendance) {
+//       const hoursWorked = (currentTime - record.startDayTime) / (1000 * 60 * 60);
 
-      if (hoursWorked >= MAX_WORKING_HOURS) {
-        // Auto end the day
-        record.endDayTime = currentTime;
-        record.employeeNotes = `Auto-ended after ${MAX_WORKING_HOURS} hours of work`;
-        record.autoEnded = true;
+//       if (hoursWorked >= MAX_WORKING_HOURS) {
+//         // Auto end the day
+//         record.endDayTime = currentTime;
+//         record.employeeNotes = `Auto-ended after ${MAX_WORKING_HOURS} hours of work`;
+//         record.autoEnded = true;
 
-        // Calculate hours worked
-        const startTime = new Date(record.startDayTime);
-        const endTime = currentTime;
-        const timeDiff = endTime - startTime;
-        const calculatedHours = Math.round((timeDiff / (1000 * 60 * 60)) * 100) / 100;
-        record.hoursWorked = calculatedHours;
+//         // Calculate hours worked
+//         const startTime = new Date(record.startDayTime);
+//         const endTime = currentTime;
+//         const timeDiff = endTime - startTime;
+//         const calculatedHours = Math.round((timeDiff / (1000 * 60 * 60)) * 100) / 100;
+//         record.hoursWorked = calculatedHours;
 
-        await record.save();
+//         await record.save();
 
-        // Also update DailyAttendance for permanent storage
-        await DailyAttendance.findOneAndUpdate(
-          { user: record.user._id, date: today },
-          {
-            $set: {
-              endDayTime: currentTime,
-              hoursWorked: calculatedHours,
-              status: 'present',
-              autoEnded: true,
-              employeeNotes: `Auto-ended after ${MAX_WORKING_HOURS} hours of work`
-            }
-          },
-          { upsert: true, new: true }
-        );
+//         // Also update DailyAttendance for permanent storage
+//         await DailyAttendance.findOneAndUpdate(
+//           { user: record.user._id, date: today },
+//           {
+//             $set: {
+//               endDayTime: currentTime,
+//               hoursWorked: calculatedHours,
+//               status: 'present',
+//               autoEnded: true,
+//               employeeNotes: `Auto-ended after ${MAX_WORKING_HOURS} hours of work`
+//             }
+//           },
+//           { upsert: true, new: true }
+//         );
 
-        console.log(`✅ Auto-ended day for user: ${record.user.name} after ${calculatedHours} hours`);
+//         console.log(`✅ Auto-ended day for user: ${record.user.name} after ${calculatedHours} hours`);
 
-        // Emit socket event
-        io.emit('attendance:auto-day-ended', {
-          userId: record.user._id,
-          userName: record.user.name,
-          endTime: currentTime,
-          hoursWorked: calculatedHours,
-          reason: 'Exceeded maximum working hours'
-        });
-      }
-    }
-  } catch (error) {
-    console.error('❌ Auto end day job error:', error);
-  }
-};
+//         // Emit socket event
+//         io.emit('attendance:auto-day-ended', {
+//           userId: record.user._id,
+//           userName: record.user.name,
+//           endTime: currentTime,
+//           hoursWorked: calculatedHours,
+//           reason: 'Exceeded maximum working hours'
+//         });
+//       }
+//     }
+//   } catch (error) {
+//     console.error('❌ Auto end day job error:', error);
+//   }
+// };
 
-// Run auto-end day job every 30 minutes
-setInterval(autoEndDayJob, 30 * 60 * 1000);
+// Run auto-end day job every 30 minutes - DISABLED
+// setInterval(autoEndDayJob, 30 * 60 * 1000);
 
-// Run on server start to catch any that should have already ended
-autoEndDayJob();
+// Run on server start to catch any that should have already ended - DISABLED
+// autoEndDayJob();
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -473,8 +474,8 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5001;
 server.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Auto-end day job: ${process.env.AUTO_END_DAY_ENABLED === 'true' ? 'Enabled' : 'Disabled'}`);
-  console.log(`Max working hours: ${process.env.MAX_WORKING_HOURS || 8} hours`);
+  console.log(`Auto-end day job: DISABLED (work days continue until manually ended)`);
+  console.log(`Max working hours: N/A (no limit - user must manually end day)`);
   
   // Start attendance persistence cron job
   console.log('🕐 Starting attendance persistence cron job (runs daily at 11:59 PM)...');

@@ -48,24 +48,28 @@ function startAttendancePersistenceCron() {
         const userId = attendance.user._id;
         const aim = aimMap.get(userId.toString());
         
-        // Auto-end day if not already ended
+        // Calculate hours worked (but don't auto-end - let user manually end)
         const now = new Date();
         let endTime = attendance.endDayTime;
         let hoursWorked = attendance.hoursWorked || 0;
         
+        // Only calculate hours if day is already ended by user
+        // If not ended, calculate up to current time for reporting purposes only
         if (!endTime && attendance.startDayTime) {
-          // Auto-end for users who forgot to end their day
-          endTime = now;
+          // Calculate hours worked up to now (for reporting) but don't auto-end
+          hoursWorked = (now - attendance.startDayTime) / (1000 * 60 * 60);
+          // Keep endTime as null - user must manually end day
+          // attendance.endDayTime = null; // Explicitly keep as null
+          // attendance.hoursWorked = Math.round(hoursWorked * 100) / 100; // Update for reporting
+          // Don't save - let it continue running
+          // await attendance.save(); // REMOVED - don't auto-end
+          
+          // Don't increment autoEndedCount - we're not auto-ending anymore
+          // autoEndedCount++; // REMOVED
+          console.log(`ℹ️ User ${attendance.user.name} has active work day (${Math.round(hoursWorked * 100) / 100}h) - waiting for manual end`);
+        } else if (endTime && attendance.startDayTime) {
+          // Day already ended by user - calculate final hours
           hoursWorked = (endTime - attendance.startDayTime) / (1000 * 60 * 60);
-          
-          attendance.endDayTime = endTime;
-          attendance.hoursWorked = Math.round(hoursWorked * 100) / 100;
-          attendance.autoEnded = true;
-          attendance.employeeNotes = (attendance.employeeNotes || '') + ' [Auto-ended by system]';
-          await attendance.save();
-          
-          autoEndedCount++;
-          console.log(`✅ Auto-ended day for user ${attendance.user.name}`);
         }
 
         // Create or update DailyAttendance record
@@ -147,7 +151,7 @@ function startAttendancePersistenceCron() {
 
       console.log(`✅ [CRON] End-of-day persistence complete:`);
       console.log(`   - ${persistedCount} DailyAttendance records persisted`);
-      console.log(`   - ${autoEndedCount} users auto-ended`);
+      console.log(`   - Note: Auto-end day is disabled - users must manually end their work day`);
       
     } catch (error) {
       console.error('❌ [CRON] Error in attendance persistence:', error);
