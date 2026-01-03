@@ -324,12 +324,12 @@ const SalaryCalculation = ({ userId }) => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee Name & Per Hour Rate</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead className="text-right">Working Hours</TableHead>
-                      <TableHead className="text-right">Holiday Hours</TableHead>
-                      <TableHead className="text-right">Total Hours</TableHead>
-                      <TableHead className="text-right">Calculated Salary</TableHead>
+                      <TableHead className="min-w-[280px]">Employee Name & Per Hour Rate</TableHead>
+                      <TableHead className="min-w-[150px]">Department</TableHead>
+                      <TableHead className="text-right min-w-[120px]">Working Hours</TableHead>
+                      <TableHead className="text-right min-w-[120px]">Holiday Hours</TableHead>
+                      <TableHead className="text-right min-w-[120px]">Total Hours</TableHead>
+                      <TableHead className="text-right min-w-[150px]">Calculated Salary</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -339,9 +339,9 @@ const SalaryCalculation = ({ userId }) => {
                       
                       return (
                         <TableRow key={userData.userId}>
-                          <TableCell>
+                          <TableCell className="align-middle">
                             <div className="flex items-center gap-3">
-                              <span className="font-medium min-w-[120px]">{userData.name}</span>
+                              <span className="font-medium min-w-[140px]">{userData.name}</span>
                               <div className="relative flex-1 max-w-[140px]">
                                 <DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground" />
                                 <Input
@@ -356,16 +356,19 @@ const SalaryCalculation = ({ userId }) => {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-muted-foreground align-middle">
+                            {userData.department || '-'}
+                          </TableCell>
+                          <TableCell className="text-right align-middle">
                             {userData.cumulativeHours.toFixed(2)} hrs
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right align-middle">
                             {holidayHours} hrs
                           </TableCell>
-                          <TableCell className="text-right font-semibold">
+                          <TableCell className="text-right font-semibold align-middle">
                             {totalHours.toFixed(2)} hrs
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right align-middle">
                             {salary > 0 ? (
                               <span className="font-bold text-primary">
                                 ₹{salary.toFixed(2)}
