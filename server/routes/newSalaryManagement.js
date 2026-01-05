@@ -1512,6 +1512,59 @@ router.post('/history/create-bucket', auth, adminAuth, async (req, res) => {
 });
 
 /**
+ * DELETE /api/new-salary/history/delete-bucket
+ * Delete all salary records in a bucket (by date range)
+ * Query params: startDate, endDate
+ * Admin only
+ */
+router.delete('/history/delete-bucket', auth, adminAuth, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate and endDate are required'
+      });
+    }
+
+    // Parse dates
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    // Delete all bucketed records for this exact date range
+    const result = await NewSalaryRecord.deleteMany({
+      isConfirmed: true,
+      isBucketed: true,
+      startDate: {
+        $gte: new Date(start.setHours(0, 0, 0, 0)),
+        $lte: new Date(new Date(startDate).setHours(23, 59, 59, 999))
+      },
+      endDate: {
+        $gte: new Date(end.setHours(0, 0, 0, 0)),
+        $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999))
+      }
+    });
+
+    console.log(`🗑️ Deleted bucket with ${result.deletedCount} salary records`);
+
+    res.json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} salary record(s)`,
+      data: {
+        deletedCount: result.deletedCount
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting bucket:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to delete bucket' 
+    });
+  }
+});
+
+/**
  * ============================================
  * SPAM USERS MANAGEMENT SECTION
  * ============================================

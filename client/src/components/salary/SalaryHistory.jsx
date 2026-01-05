@@ -12,7 +12,8 @@ import {
   IndianRupee, 
   ChevronRight,
   Download,
-  FolderOpen
+  FolderOpen,
+  Trash2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { api } from '@/lib/api';
@@ -25,6 +26,7 @@ const SalaryHistory = () => {
   const [bucketDetails, setBucketDetails] = useState([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [deletingBucket, setDeletingBucket] = useState(null);
   const { toast } = useToast();
 
   const fetchSalaryBuckets = async () => {
@@ -84,6 +86,42 @@ const SalaryHistory = () => {
 
   const getTotalEmployees = () => {
     return buckets.reduce((sum, bucket) => sum + (bucket.employeeCount || 0), 0);
+  };
+
+  // Delete bucket
+  const handleDeleteBucket = async (e, bucket) => {
+    e.stopPropagation(); // Prevent opening details dialog
+    
+    if (!confirm(`Are you sure you want to delete this bucket?\n\nPeriod: ${format(new Date(bucket.startDate), 'dd MMM yyyy')} - ${format(new Date(bucket.endDate), 'dd MMM yyyy')}\nEmployees: ${bucket.employeeCount}\nTotal Salary: ₹${bucket.totalSalary?.toLocaleString('en-IN')}\n\nThis will permanently delete all salary records in this bucket.`)) {
+      return;
+    }
+
+    setDeletingBucket(bucket);
+    try {
+      const response = await api.delete('/new-salary/history/delete-bucket', {
+        params: {
+          startDate: bucket.startDate,
+          endDate: bucket.endDate
+        }
+      });
+
+      if (response.success) {
+        toast({
+          title: 'Bucket Deleted',
+          description: `Successfully deleted ${response.data?.deletedCount || bucket.employeeCount} salary record(s)`,
+        });
+        fetchSalaryBuckets();
+      }
+    } catch (error) {
+      console.error('Error deleting bucket:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.error || 'Failed to delete bucket',
+        variant: 'destructive'
+      });
+    } finally {
+      setDeletingBucket(null);
+    }
   };
 
   // Download bucket as PDF
@@ -381,6 +419,15 @@ const SalaryHistory = () => {
                           ₹{bucket.totalSalary?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </p>
                       </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={(e) => handleDeleteBucket(e, bucket)}
+                        disabled={deletingBucket === bucket}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                       <ChevronRight className="h-5 w-5 text-muted-foreground" />
                     </div>
                   </div>
