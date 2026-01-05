@@ -1,0 +1,496 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { 
+  History, 
+  RefreshCw, 
+  Calendar, 
+  Users, 
+  IndianRupee, 
+  ChevronRight,
+  Download,
+  FolderOpen
+} from 'lucide-react';
+import { format } from 'date-fns';
+import { api } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
+
+const SalaryHistory = () => {
+  const [buckets, setBuckets] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedBucket, setSelectedBucket] = useState(null);
+  const [bucketDetails, setBucketDetails] = useState([]);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const { toast } = useToast();
+
+  const fetchSalaryBuckets = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/new-salary/history/buckets');
+      if (response.success) {
+        setBuckets(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching salary buckets:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch salary history',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSalaryBuckets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleViewBucket = async (bucket) => {
+    setSelectedBucket(bucket);
+    setDetailsDialogOpen(true);
+    setDetailsLoading(true);
+
+    try {
+      const response = await api.get('/new-salary/history/bucket-details', {
+        params: {
+          startDate: bucket.startDate,
+          endDate: bucket.endDate
+        }
+      });
+      if (response.success) {
+        setBucketDetails(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching bucket details:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch bucket details',
+        variant: 'destructive'
+      });
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const getTotalSalary = () => {
+    return buckets.reduce((sum, bucket) => sum + (bucket.totalSalary || 0), 0);
+  };
+
+  const getTotalEmployees = () => {
+    return buckets.reduce((sum, bucket) => sum + (bucket.employeeCount || 0), 0);
+  };
+
+  // Download bucket as PDF
+  const handleDownloadBucketPDF = (bucket, records) => {
+    const printWindow = window.open('', '_blank');
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Salary Report - ${format(new Date(bucket.startDate), 'MMM yyyy')}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            color: #333;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 20px;
+          }
+          .header h1 {
+            color: #3b82f6;
+            margin: 0;
+            font-size: 24px;
+          }
+          .header p {
+            color: #666;
+            margin: 5px 0 0;
+            font-size: 14px;
+          }
+          .period {
+            background: #eff6ff;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #3b82f6;
+            text-align: center;
+          }
+          .period-label {
+            font-size: 12px;
+            color: #666;
+          }
+          .period-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #3b82f6;
+          }
+          .summary {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+          }
+          .summary-item {
+            text-align: center;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 8px;
+            flex: 1;
+            margin: 0 5px;
+          }
+          .summary-label {
+            font-size: 12px;
+            color: #666;
+          }
+          .summary-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #16a34a;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 12px;
+          }
+          th, td {
+            border: 1px solid #ddd;
+            padding: 10px 8px;
+            text-align: left;
+          }
+          th {
+            background-color: #3b82f6;
+            color: white;
+            font-weight: 600;
+          }
+          tr:nth-child(even) {
+            background-color: #f9f9f9;
+          }
+          .text-right {
+            text-align: right;
+          }
+          .confirmed-amount {
+            font-weight: bold;
+            color: #16a34a;
+          }
+          .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 11px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 15px;
+          }
+          @media print {
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>📁 Monthly Salary Report</h1>
+          <p>Generated on ${format(new Date(), 'dd MMMM yyyy, h:mm a')}</p>
+        </div>
+        
+        <div class="period">
+          <div class="period-label">Salary Period</div>
+          <div class="period-value">${format(new Date(bucket.startDate), 'dd MMM yyyy')} - ${format(new Date(bucket.endDate), 'dd MMM yyyy')}</div>
+        </div>
+        
+        <div class="summary">
+          <div class="summary-item">
+            <div class="summary-label">Total Employees</div>
+            <div class="summary-value">${records.length}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">Total Hours</div>
+            <div class="summary-value">${records.reduce((sum, r) => sum + (r.totalCumulativeHours || 0), 0).toFixed(2)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">Total Salary</div>
+            <div class="summary-value">₹${records.reduce((sum, r) => sum + (r.confirmedSalary || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+          </div>
+        </div>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Employee Name</th>
+              <th>Department</th>
+              <th class="text-right">Working Hrs</th>
+              <th class="text-right">Holiday Hrs</th>
+              <th class="text-right">Total Hrs</th>
+              <th class="text-right">Rate (₹/hr)</th>
+              <th class="text-right">Confirmed Salary</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${records.map((record, index) => `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${record.user?.name || 'Unknown'}</td>
+                <td>${record.user?.department?.name || '-'}</td>
+                <td class="text-right">${record.workingHours?.toFixed(2) || 0}</td>
+                <td class="text-right">${record.holidayHours || 0}</td>
+                <td class="text-right">${record.totalCumulativeHours?.toFixed(2) || 0}</td>
+                <td class="text-right">₹${record.perHourRate || 0}</td>
+                <td class="text-right confirmed-amount">₹${record.confirmedSalary?.toLocaleString('en-IN', { minimumFractionDigits: 2 }) || '0.00'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="background-color: #3b82f6; color: white; font-weight: bold;">
+              <td colspan="7" class="text-right">Grand Total:</td>
+              <td class="text-right">₹${records.reduce((sum, r) => sum + (r.confirmedSalary || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            </tr>
+          </tfoot>
+        </table>
+        
+        <div class="footer">
+          <p>This is a system generated salary report.</p>
+        </div>
+        
+        <script>
+          window.onload = function() {
+            window.print();
+          }
+        </script>
+      </body>
+      </html>
+    `;
+    
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+  return (
+    <Card className="neo-card">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-blue-500" />
+              Salary History
+            </CardTitle>
+            <CardDescription>
+              View salary records organized by monthly periods
+            </CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchSalaryBuckets} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="bg-blue-500/10 border-blue-500/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <FolderOpen className="h-8 w-8 text-blue-500" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Periods</p>
+                  <p className="text-2xl font-bold">{buckets.length}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-green-500/10 border-green-500/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <IndianRupee className="h-8 w-8 text-green-500" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Disbursed</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    ₹{getTotalSalary().toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-purple-500/10 border-purple-500/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <Users className="h-8 w-8 text-purple-500" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Records</p>
+                  <p className="text-2xl font-bold">{getTotalEmployees()}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Buckets List */}
+        {loading ? (
+          <div className="text-center py-8 text-muted-foreground">
+            Loading salary history...
+          </div>
+        ) : buckets.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No salary history found</p>
+            <p className="text-sm mt-2">Confirmed salaries will appear here organized by period</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {buckets.map((bucket, index) => (
+              <Card 
+                key={index} 
+                className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-blue-500"
+                onClick={() => handleViewBucket(bucket)}
+              >
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-blue-500/10 rounded-lg">
+                        <Calendar className="h-6 w-6 text-blue-500" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-lg">
+                          {format(new Date(bucket.startDate), 'dd MMM')} - {format(new Date(bucket.endDate), 'dd MMM yyyy')}
+                        </h3>
+                        <div className="flex items-center gap-4 mt-1">
+                          <Badge variant="secondary" className="gap-1">
+                            <Users className="h-3 w-3" />
+                            {bucket.employeeCount} employees
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {bucket.totalHours?.toFixed(2)} total hours
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">Total Salary</p>
+                        <p className="text-xl font-bold text-green-600">
+                          ₹{bucket.totalSalary?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Bucket Details Dialog */}
+        <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-blue-500" />
+                Salary Period Details
+              </DialogTitle>
+              <DialogDescription>
+                {selectedBucket && (
+                  <span>
+                    {format(new Date(selectedBucket.startDate), 'dd MMM yyyy')} - {format(new Date(selectedBucket.endDate), 'dd MMM yyyy')}
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            
+            {detailsLoading ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Loading details...
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Summary */}
+                <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Employees</p>
+                    <p className="text-xl font-bold">{bucketDetails.length}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Total Hours</p>
+                    <p className="text-xl font-bold">
+                      {bucketDetails.reduce((sum, r) => sum + (r.totalCumulativeHours || 0), 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Total Salary</p>
+                    <p className="text-xl font-bold text-green-600">
+                      ₹{bucketDetails.reduce((sum, r) => sum + (r.confirmedSalary || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Download Button */}
+                <div className="flex justify-end">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleDownloadBucketPDF(selectedBucket, bucketDetails)}
+                    className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 border-blue-500/30"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download PDF
+                  </Button>
+                </div>
+
+                {/* Employee List */}
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>#</TableHead>
+                        <TableHead>Employee</TableHead>
+                        <TableHead className="text-right">Working Hrs</TableHead>
+                        <TableHead className="text-right">Holiday Hrs</TableHead>
+                        <TableHead className="text-right">Total Hrs</TableHead>
+                        <TableHead className="text-right">Rate</TableHead>
+                        <TableHead className="text-right">Salary</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bucketDetails.map((record, index) => (
+                        <TableRow key={record._id}>
+                          <TableCell>{index + 1}</TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{record.user?.name || 'Unknown'}</p>
+                              <p className="text-xs text-muted-foreground">{record.user?.department?.name || '-'}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">{record.workingHours?.toFixed(2)} hrs</TableCell>
+                          <TableCell className="text-right">{record.holidayHours || 0} hrs</TableCell>
+                          <TableCell className="text-right font-medium">{record.totalCumulativeHours?.toFixed(2)} hrs</TableCell>
+                          <TableCell className="text-right">₹{record.perHourRate}</TableCell>
+                          <TableCell className="text-right">
+                            <span className="font-bold text-green-600">
+                              ₹{record.confirmedSalary?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default SalaryHistory;

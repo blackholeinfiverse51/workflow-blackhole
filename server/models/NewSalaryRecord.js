@@ -82,8 +82,42 @@ const newSalaryRecordSchema = new mongoose.Schema({
   // Status
   status: {
     type: String,
-    enum: ['Draft', 'Calculated', 'Approved', 'Paid'],
+    enum: ['Draft', 'Calculated', 'Confirmed', 'Approved', 'Paid'],
     default: 'Calculated'
+  },
+  
+  // Confirmed Salary (Admin can set final confirmed amount)
+  confirmedSalary: {
+    type: Number,
+    default: null
+  },
+  isConfirmed: {
+    type: Boolean,
+    default: false
+  },
+  confirmedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  confirmedAt: {
+    type: Date
+  },
+  confirmationNotes: {
+    type: String,
+    maxlength: 500
+  },
+  
+  // Bucket Management (for history)
+  isBucketed: {
+    type: Boolean,
+    default: false
+  },
+  bucketedAt: {
+    type: Date
+  },
+  bucketedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   },
   
   // For payslip generation

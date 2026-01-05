@@ -120,12 +120,58 @@ router.get('/hours/all', auth, adminAuth, async (req, res) => {
     });
 
     // Get all active users
-    const users = await User.find({ stillExist: 1 })
+    const allUsers = await User.find({ stillExist: 1 })
       .populate('department', 'name color')
       .select('name email department employeeId role')
       .lean();
     
-    console.log(`Found ${users.length} active users`);
+    console.log(`Found ${allUsers.length} active users`);
+
+    if (!allUsers || allUsers.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          users: [],
+          totalUsers: 0,
+          totalCumulativeHours: 0,
+          dateRange: {
+            from: startDate.toISOString(),
+            to: endDate.toISOString()
+          }
+        }
+      });
+    }
+
+    // Filter out users who already have confirmed salaries for this date range
+    // Find confirmed salary records that overlap with the selected date range
+    const confirmedRecords = await NewSalaryRecord.find({
+      isConfirmed: true,
+      startDate: { $lte: endDate },
+      endDate: { $gte: startDate }
+    }).select('user startDate endDate').lean();
+
+    // Create a set of user IDs who have confirmed salaries for the EXACT same date range
+    const confirmedUserIds = new Set();
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
+    
+    confirmedRecords.forEach(record => {
+      const recordStartStr = new Date(record.startDate).toISOString().split('T')[0];
+      const recordEndStr = new Date(record.endDate).toISOString().split('T')[0];
+      
+      // Check if the confirmed record matches the same date range
+      if (recordStartStr === startDateStr && recordEndStr === endDateStr) {
+        confirmedUserIds.add(record.user.toString());
+      }
+    });
+
+    console.log(`📋 Found ${confirmedUserIds.size} users with confirmed salaries for this exact date range`);
+
+    // Filter out confirmed users
+    const users = allUsers.filter(user => !confirmedUserIds.has(user._id.toString()));
+    
+    console.log(`📋 ${allUsers.length - users.length} users filtered out (already confirmed)`);
+    console.log(`📋 ${users.length} users remaining for salary calculation`);
 
     if (!users || users.length === 0) {
       return res.json({
@@ -1089,6 +1135,379 @@ router.delete('/records/:recordId', auth, adminAuth, async (req, res) => {
   } catch (error) {
     console.error('Error deleting salary record:', error);
     res.status(500).json({ error: 'Failed to delete salary record' });
+  }
+});
+
+/**
+ * ============================================
+ * CONFIRMED SALARY SECTION
+ * ============================================
+ */
+
+/**
+ * PUT /api/new-salary/confirm/:recordId
+ * Confirm a salary record with optional adjusted amount
+ * Admin only
+ */
+router.put('/confirm/:recordId', auth, adminAuth, async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    const { confirmedSalary, confirmationNotes } = req.body;
+
+    const record = await NewSalaryRecord.findById(recordId);
+    
+    if (!record) {
+      return res.status(404).json({ error: 'Salary record not found' });
+    }
+
+    // Use the provided confirmedSalary or default to calculatedSalary
+    const finalConfirmedSalary = confirmedSalary !== undefined && confirmedSalary !== null 
+      ? parseFloat(confirmedSalary) 
+      : record.calculatedSalary;
+
+    record.confirmedSalary = finalConfirmedSalary;
+    record.isConfirmed = true;
+    record.confirmedBy = req.user.id;
+    record.confirmedAt = new Date();
+    record.confirmationNotes = confirmationNotes || '';
+    record.status = 'Confirmed';
+
+    await record.save();
+
+    // Populate user info for response
+    await record.populate('user', 'name email employeeId');
+    await record.populate('confirmedBy', 'name email');
+
+    res.json({
+      success: true,
+      message: 'Salary confirmed successfully',
+      data: {
+        _id: record._id,
+        userId: record.user._id,
+        userName: record.user.name,
+        userEmail: record.user.email,
+        startDate: record.startDate,
+        endDate: record.endDate,
+        workingHours: record.workingHours,
+        holidayHours: record.holidayHours,
+        totalCumulativeHours: record.totalCumulativeHours,
+        perHourRate: record.perHourRate,
+        calculatedSalary: record.calculatedSalary,
+        confirmedSalary: record.confirmedSalary,
+        isConfirmed: record.isConfirmed,
+        confirmedBy: record.confirmedBy,
+        confirmedAt: record.confirmedAt,
+        confirmationNotes: record.confirmationNotes,
+        status: record.status
+      }
+    });
+  } catch (error) {
+    console.error('Error confirming salary:', error);
+    res.status(500).json({ error: 'Failed to confirm salary', details: error.message });
+  }
+});
+
+/**
+ * GET /api/new-salary/confirmed
+ * Get all confirmed salary records (not yet bucketed)
+ * Admin only
+ */
+router.get('/confirmed', auth, adminAuth, async (req, res) => {
+  try {
+    const { startDate, endDate, userId } = req.query;
+
+    // Only get confirmed records that are NOT bucketed yet
+    const query = { 
+      isConfirmed: true,
+      $or: [
+        { isBucketed: { $exists: false } },
+        { isBucketed: false }
+      ]
+    };
+    
+    if (userId) query.user = userId;
+    if (startDate || endDate) {
+      query.startDate = {};
+      if (startDate) query.startDate.$gte = new Date(startDate);
+      if (endDate) query.startDate.$lte = new Date(endDate);
+    }
+
+    const records = await NewSalaryRecord.find(query)
+      .sort({ confirmedAt: -1 })
+      .populate('user', 'name email employeeId department')
+      .populate('confirmedBy', 'name email')
+      .populate('calculatedBy', 'name email')
+      .select('-__v');
+
+    res.json({
+      success: true,
+      data: records
+    });
+  } catch (error) {
+    console.error('Error fetching confirmed salaries:', error);
+    res.status(500).json({ error: 'Failed to fetch confirmed salaries' });
+  }
+});
+
+/**
+ * PUT /api/new-salary/confirmed/:recordId
+ * Update a confirmed salary record
+ * Admin only
+ */
+router.put('/confirmed/:recordId', auth, adminAuth, async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    const { perHourRate, confirmedSalary, confirmationNotes } = req.body;
+
+    const record = await NewSalaryRecord.findById(recordId);
+    
+    if (!record) {
+      return res.status(404).json({ error: 'Salary record not found' });
+    }
+
+    if (!record.isConfirmed) {
+      return res.status(400).json({ error: 'This salary record is not confirmed yet' });
+    }
+
+    // Update per hour rate if provided
+    if (perHourRate !== undefined && perHourRate !== null) {
+      record.perHourRate = parseFloat(perHourRate);
+      // Recalculate the calculated salary based on new rate
+      record.calculatedSalary = parseFloat(perHourRate) * record.totalCumulativeHours;
+    }
+    
+    if (confirmedSalary !== undefined && confirmedSalary !== null) {
+      record.confirmedSalary = parseFloat(confirmedSalary);
+    }
+    if (confirmationNotes !== undefined) {
+      record.confirmationNotes = confirmationNotes;
+    }
+    record.confirmedBy = req.user.id;
+    record.confirmedAt = new Date();
+
+    await record.save();
+
+    await record.populate('user', 'name email employeeId department');
+    await record.populate('confirmedBy', 'name email');
+
+    res.json({
+      success: true,
+      message: 'Confirmed salary updated successfully',
+      data: record
+    });
+  } catch (error) {
+    console.error('Error updating confirmed salary:', error);
+    res.status(500).json({ error: 'Failed to update confirmed salary', details: error.message });
+  }
+});
+
+/**
+ * DELETE /api/new-salary/confirmed/:recordId
+ * Remove confirmation from a salary record (revert to calculated)
+ * Admin only
+ */
+router.delete('/confirmed/:recordId', auth, adminAuth, async (req, res) => {
+  try {
+    const { recordId } = req.params;
+
+    const record = await NewSalaryRecord.findById(recordId);
+    
+    if (!record) {
+      return res.status(404).json({ error: 'Salary record not found' });
+    }
+
+    record.confirmedSalary = null;
+    record.isConfirmed = false;
+    record.confirmedBy = null;
+    record.confirmedAt = null;
+    record.confirmationNotes = '';
+    record.status = 'Calculated';
+
+    await record.save();
+
+    res.json({
+      success: true,
+      message: 'Salary confirmation removed successfully'
+    });
+  } catch (error) {
+    console.error('Error removing salary confirmation:', error);
+    res.status(500).json({ error: 'Failed to remove salary confirmation' });
+  }
+});
+
+/**
+ * ============================================
+ * SALARY HISTORY SECTION
+ * ============================================
+ */
+
+/**
+ * GET /api/new-salary/history/buckets
+ * Get all salary periods (buckets) grouped by date range
+ * Returns summary for each unique date range (only bucketed records)
+ * Admin only
+ */
+router.get('/history/buckets', auth, adminAuth, async (req, res) => {
+  try {
+    // Aggregate bucketed salaries by date range (startDate + endDate combination)
+    const buckets = await NewSalaryRecord.aggregate([
+      {
+        $match: { 
+          isConfirmed: true,
+          isBucketed: true
+        }
+      },
+      {
+        $group: {
+          _id: {
+            startDate: '$startDate',
+            endDate: '$endDate'
+          },
+          employeeCount: { $sum: 1 },
+          totalSalary: { $sum: '$confirmedSalary' },
+          totalHours: { $sum: '$totalCumulativeHours' },
+          records: { $push: '$_id' }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          startDate: '$_id.startDate',
+          endDate: '$_id.endDate',
+          employeeCount: 1,
+          totalSalary: 1,
+          totalHours: 1,
+          recordCount: { $size: '$records' }
+        }
+      },
+      {
+        $sort: { startDate: -1 }
+      }
+    ]);
+
+    console.log(`📁 Found ${buckets.length} salary periods (buckets)`);
+
+    res.json({
+      success: true,
+      data: buckets
+    });
+  } catch (error) {
+    console.error('Error fetching salary buckets:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch salary history' 
+    });
+  }
+});
+
+/**
+ * GET /api/new-salary/history/bucket-details
+ * Get all confirmed salary records for a specific date range
+ * Query params: startDate, endDate
+ * Admin only
+ */
+router.get('/history/bucket-details', auth, adminAuth, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate and endDate are required'
+      });
+    }
+
+    // Parse dates
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    // Find all bucketed records for this exact date range
+    const records = await NewSalaryRecord.find({
+      isConfirmed: true,
+      isBucketed: true,
+      startDate: {
+        $gte: new Date(start.setHours(0, 0, 0, 0)),
+        $lte: new Date(start.setHours(23, 59, 59, 999))
+      },
+      endDate: {
+        $gte: new Date(end.setHours(0, 0, 0, 0)),
+        $lte: new Date(end.setHours(23, 59, 59, 999))
+      }
+    })
+    .populate('user', 'name email employeeId department')
+    .populate({
+      path: 'user',
+      populate: {
+        path: 'department',
+        select: 'name color'
+      }
+    })
+    .populate('confirmedBy', 'name email')
+    .sort({ 'user.name': 1 });
+
+    console.log(`📁 Found ${records.length} records for period ${startDate} to ${endDate}`);
+
+    res.json({
+      success: true,
+      data: records
+    });
+  } catch (error) {
+    console.error('Error fetching bucket details:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch bucket details' 
+    });
+  }
+});
+
+/**
+ * POST /api/new-salary/history/create-bucket
+ * Create a bucket by marking confirmed salaries as "bucketed" (moved to history)
+ * This marks records as finalized and clears them from the confirmed list
+ * Body: { recordIds: array of record IDs }
+ * Admin only
+ */
+router.post('/history/create-bucket', auth, adminAuth, async (req, res) => {
+  try {
+    const { recordIds } = req.body;
+
+    if (!recordIds || !Array.isArray(recordIds) || recordIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'recordIds array is required'
+      });
+    }
+
+    // Update all records to mark them as bucketed (finalized)
+    const result = await NewSalaryRecord.updateMany(
+      { 
+        _id: { $in: recordIds },
+        isConfirmed: true 
+      },
+      { 
+        $set: { 
+          isBucketed: true,
+          bucketedAt: new Date(),
+          bucketedBy: req.user.id
+        } 
+      }
+    );
+
+    console.log(`📁 Created bucket with ${result.modifiedCount} salary records`);
+
+    res.json({
+      success: true,
+      message: `Successfully created bucket with ${result.modifiedCount} salary record(s)`,
+      data: {
+        recordsProcessed: result.modifiedCount
+      }
+    });
+  } catch (error) {
+    console.error('Error creating bucket:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to create bucket' 
+    });
   }
 });
 

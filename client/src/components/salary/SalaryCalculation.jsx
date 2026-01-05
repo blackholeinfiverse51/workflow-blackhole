@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,30 +7,64 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calculator, CalendarIcon, X, Users } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Calculator, CalendarIcon, X, Users, CheckCircle, CheckCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/auth-context';
 
-const SalaryCalculation = ({ userId }) => {
+const SalaryCalculation = ({ userId, onConfirmSalary, persistedState, onStateChange }) => {
   const { user } = useAuth();
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
-  const [holidays, setHolidays] = useState([]);
-  const [usersData, setUsersData] = useState([]);
-  const [userRates, setUserRates] = useState({}); // userId -> perHourRate
-  const [holidayHours, setHolidayHours] = useState(0);
+  
+  // Use persisted state if available, otherwise use default values
+  const [startDate, setStartDate] = useState(persistedState?.startDate || null);
+  const [endDate, setEndDate] = useState(persistedState?.endDate || null);
+  const [holidays, setHolidays] = useState(persistedState?.holidays || []);
+  const [usersData, setUsersData] = useState(persistedState?.usersData || []);
+  const [userRates, setUserRates] = useState(persistedState?.userRates || {}); // userId -> perHourRate
+  const [holidayHours, setHolidayHours] = useState((persistedState?.holidays?.length || 0) * 8);
   const [loading, setLoading] = useState(false);
   const [calculating, setCalculating] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [selectedUserForConfirm, setSelectedUserForConfirm] = useState(null);
+  const [confirmSalaryValue, setConfirmSalaryValue] = useState('');
+  const [confirmNotes, setConfirmNotes] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [confirmingAll, setConfirmingAll] = useState(false);
   const { toast } = useToast();
+
+  // Persist state changes to parent component
+  const persistState = useCallback(() => {
+    if (onStateChange) {
+      onStateChange({
+        startDate,
+        endDate,
+        holidays,
+        userRates,
+        usersData
+      });
+    }
+  }, [startDate, endDate, holidays, userRates, usersData, onStateChange]);
+
+  // Save state whenever it changes
+  useEffect(() => {
+    persistState();
+  }, [startDate, endDate, holidays, userRates, persistState]);
 
   // Fetch all users with their hours when date range changes
   useEffect(() => {
     if (startDate && endDate && user?.role === 'Admin') {
-      fetchAllUsersHours();
+      // Only fetch if we don't have data or dates changed
+      if (usersData.length === 0 || 
+          persistedState?.startDate?.getTime?.() !== startDate?.getTime?.() ||
+          persistedState?.endDate?.getTime?.() !== endDate?.getTime?.()) {
+        fetchAllUsersHours();
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate, user?.role]);
 
   // Calculate holiday hours when holidays change
@@ -55,6 +89,7 @@ const SalaryCalculation = ({ userId }) => {
       };
     });
     setUsersData(updatedUsers);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRates, holidayHours]);
 
   const fetchAllUsersHours = async () => {
@@ -183,6 +218,242 @@ const SalaryCalculation = ({ userId }) => {
       setCalculating(false);
     }
   };
+
+  // Open confirm dialog for a specific user
+  const handleOpenConfirmDialog = (userData) => {
+    if (!userData.calculatedSalary || userData.calculatedSalary <= 0) {
+      toast({
+        title: 'Cannot Confirm',
+        description: 'Please enter rate and calculate salary first',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // First save the calculation, then open confirm dialog
+    handleSaveAndConfirm(userData);
+  };
+
+  // Save calculation and then confirm
+  const handleSaveAndConfirm = async (userData) => {
+    if (!startDate || !endDate) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please select date range',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const perHourRate = parseFloat(userRates[userData.userId]);
+    if (!perHourRate || perHourRate <= 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please enter a valid per hour rate',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setCalculating(true);
+    try {
+      const totalCumulativeHours = (userData.cumulativeHours || 0) + holidayHours;
+      const calculatedSalary = perHourRate * totalCumulativeHours;
+
+      // Save the calculation first
+      const calcResponse = await api.post('/new-salary/calculate', {
+        userId: userData.userId,
+        startDate: format(startDate, 'yyyy-MM-dd'),
+        endDate: format(endDate, 'yyyy-MM-dd'),
+        holidays: holidays,
+        perHourRate: perHourRate,
+        workingHours: userData.cumulativeHours || 0,
+        holidayHours: holidayHours,
+        totalCumulativeHours: totalCumulativeHours,
+        calculatedSalary: calculatedSalary
+      });
+
+      if (calcResponse.success) {
+        // Now open confirm dialog with the record ID
+        setSelectedUserForConfirm({
+          ...userData,
+          recordId: calcResponse.data.salaryRecord._id,
+          calculatedSalary: calculatedSalary,
+          perHourRate: perHourRate,
+          totalCumulativeHours: totalCumulativeHours
+        });
+        setConfirmSalaryValue(calculatedSalary.toFixed(2));
+        setConfirmNotes('');
+        setConfirmDialogOpen(true);
+      }
+    } catch (error) {
+      console.error('Error saving calculation:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.error || 'Failed to save calculation',
+        variant: 'destructive'
+      });
+    } finally {
+      setCalculating(false);
+    }
+  };
+
+  // Confirm the salary
+  const handleConfirmSalary = async () => {
+    if (!selectedUserForConfirm || !selectedUserForConfirm.recordId) {
+      toast({
+        title: 'Error',
+        description: 'No salary record to confirm',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setConfirming(true);
+    try {
+      const response = await api.put(`/new-salary/confirm/${selectedUserForConfirm.recordId}`, {
+        confirmedSalary: parseFloat(confirmSalaryValue),
+        confirmationNotes: confirmNotes
+      });
+
+      if (response.success) {
+        toast({
+          title: 'Salary Confirmed',
+          description: `Salary confirmed for ${selectedUserForConfirm.name}`,
+        });
+        
+        // Remove the confirmed user from the list
+        const confirmedUserId = selectedUserForConfirm.userId;
+        setUsersData(prevUsers => prevUsers.filter(u => u.userId !== confirmedUserId));
+        
+        // Also remove from userRates
+        setUserRates(prevRates => {
+          const newRates = { ...prevRates };
+          delete newRates[confirmedUserId];
+          return newRates;
+        });
+        
+        setConfirmDialogOpen(false);
+        setSelectedUserForConfirm(null);
+        
+        // Navigate to confirm tab
+        if (onConfirmSalary) {
+          onConfirmSalary();
+        }
+      }
+    } catch (error) {
+      console.error('Error confirming salary:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.error || 'Failed to confirm salary',
+        variant: 'destructive'
+      });
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  // Confirm all users with rates entered
+  const handleConfirmAll = async () => {
+    if (!startDate || !endDate) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please select date range',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Get users who have rates entered and have working hours
+    const usersToConfirm = usersData.filter(u => {
+      const rate = parseFloat(userRates[u.userId] || 0);
+      return rate > 0 && u.cumulativeHours > 0;
+    });
+
+    if (usersToConfirm.length === 0) {
+      toast({
+        title: 'No Users to Confirm',
+        description: 'Please enter rates for users first',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setConfirmingAll(true);
+    let confirmedCount = 0;
+    const confirmedUserIds = [];
+
+    try {
+      for (const userData of usersToConfirm) {
+        const perHourRate = parseFloat(userRates[userData.userId]);
+        const totalCumulativeHours = (userData.cumulativeHours || 0) + holidayHours;
+        const calculatedSalary = perHourRate * totalCumulativeHours;
+
+        // First save the calculation
+        const calcResponse = await api.post('/new-salary/calculate', {
+          userId: userData.userId,
+          startDate: format(startDate, 'yyyy-MM-dd'),
+          endDate: format(endDate, 'yyyy-MM-dd'),
+          holidays: holidays,
+          perHourRate: perHourRate,
+          workingHours: userData.cumulativeHours || 0,
+          holidayHours: holidayHours,
+          totalCumulativeHours: totalCumulativeHours,
+          calculatedSalary: calculatedSalary
+        });
+
+        if (calcResponse.success) {
+          // Then confirm the salary
+          const confirmResponse = await api.put(`/new-salary/confirm/${calcResponse.data.salaryRecord._id}`, {
+            confirmedSalary: calculatedSalary,
+            confirmationNotes: 'Bulk confirmed'
+          });
+
+          if (confirmResponse.success) {
+            confirmedCount++;
+            confirmedUserIds.push(userData.userId);
+          }
+        }
+      }
+
+      if (confirmedCount > 0) {
+        toast({
+          title: 'Success',
+          description: `Successfully confirmed salary for ${confirmedCount} employee(s)`,
+        });
+
+        // Remove confirmed users from the list
+        setUsersData(prevUsers => prevUsers.filter(u => !confirmedUserIds.includes(u.userId)));
+        
+        // Also remove from userRates
+        setUserRates(prevRates => {
+          const newRates = { ...prevRates };
+          confirmedUserIds.forEach(id => delete newRates[id]);
+          return newRates;
+        });
+
+        // Navigate to confirm tab
+        if (onConfirmSalary) {
+          onConfirmSalary();
+        }
+      }
+    } catch (error) {
+      console.error('Error confirming salaries:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.error || 'Failed to confirm some salaries',
+        variant: 'destructive'
+      });
+    } finally {
+      setConfirmingAll(false);
+    }
+  };
+
+  // Get count of users ready to confirm (have rate entered)
+  const usersReadyToConfirm = usersData.filter(u => {
+    const rate = parseFloat(userRates[u.userId] || 0);
+    return rate > 0 && u.cumulativeHours > 0;
+  });
 
   return (
     <Card className="neo-card">
@@ -330,6 +601,7 @@ const SalaryCalculation = ({ userId }) => {
                       <TableHead className="text-right min-w-[120px]">Holiday Hours</TableHead>
                       <TableHead className="text-right min-w-[120px]">Total Hours</TableHead>
                       <TableHead className="text-right min-w-[150px]">Calculated Salary</TableHead>
+                      <TableHead className="text-center min-w-[130px]">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -377,6 +649,18 @@ const SalaryCalculation = ({ userId }) => {
                               <span className="text-muted-foreground text-sm">-</span>
                             )}
                           </TableCell>
+                          <TableCell className="text-center align-middle">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenConfirmDialog(userData)}
+                              disabled={!salary || salary <= 0 || calculating}
+                              className="bg-green-500/10 hover:bg-green-500/20 text-green-600 border-green-500/30"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Confirm
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -387,18 +671,117 @@ const SalaryCalculation = ({ userId }) => {
           </Card>
         )}
 
-        {/* Calculate All Button */}
+        {/* Action Buttons */}
         {usersData.length > 0 && (
-          <Button
-            onClick={handleCalculateAllSalaries}
-            disabled={calculating || !startDate || !endDate || usersData.filter(u => u.cumulativeHours > 0).length === 0}
-            className="w-full"
-            size="lg"
-          >
-            <Calculator className="h-4 w-4 mr-2" />
-            {calculating ? 'Calculating & Saving...' : `Calculate & Save All Salaries (${usersData.filter(u => u.cumulativeHours > 0).length} employees)`}
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              onClick={handleCalculateAllSalaries}
+              disabled={calculating || confirmingAll || !startDate || !endDate || usersData.filter(u => u.cumulativeHours > 0).length === 0}
+              className="flex-1"
+              size="lg"
+            >
+              <Calculator className="h-4 w-4 mr-2" />
+              {calculating ? 'Calculating & Saving...' : `Calculate & Save All (${usersData.filter(u => u.cumulativeHours > 0).length})`}
+            </Button>
+            
+            {/* Confirm All Button */}
+            <Button
+              onClick={handleConfirmAll}
+              disabled={confirmingAll || calculating || usersReadyToConfirm.length === 0}
+              className="flex-1 bg-green-600 hover:bg-green-700"
+              size="lg"
+            >
+              <CheckCheck className="h-4 w-4 mr-2" />
+              {confirmingAll ? 'Confirming All...' : `Confirm All (${usersReadyToConfirm.length})`}
+            </Button>
+          </div>
         )}
+
+        {/* Confirm Salary Dialog */}
+        <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                Confirm Salary
+              </DialogTitle>
+              <DialogDescription>
+                Review and confirm the salary for {selectedUserForConfirm?.name}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {/* Summary Info */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <p className="text-sm text-muted-foreground">Working Hours</p>
+                  <p className="font-semibold">{selectedUserForConfirm?.cumulativeHours?.toFixed(2) || 0} hrs</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Holiday Hours</p>
+                  <p className="font-semibold">{holidayHours} hrs</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Hours</p>
+                  <p className="font-semibold">{selectedUserForConfirm?.totalCumulativeHours?.toFixed(2) || 0} hrs</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Rate (₹/hr)</p>
+                  <p className="font-semibold">₹{selectedUserForConfirm?.perHourRate || 0}</p>
+                </div>
+              </div>
+
+              {/* Calculated Salary */}
+              <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <p className="text-sm text-muted-foreground">Calculated Salary</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  ₹{selectedUserForConfirm?.calculatedSalary?.toLocaleString('en-IN', { minimumFractionDigits: 2 }) || '0.00'}
+                </p>
+              </div>
+
+              {/* Confirm Salary Input */}
+              <div className="space-y-2">
+                <Label htmlFor="confirmSalary">Confirm Salary (You can adjust if needed)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">₹</span>
+                  <Input
+                    id="confirmSalary"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={confirmSalaryValue}
+                    onChange={(e) => setConfirmSalaryValue(e.target.value)}
+                    className="pl-8 text-lg font-semibold"
+                  />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <Label htmlFor="confirmNotes">Notes (Optional)</Label>
+                <Textarea
+                  id="confirmNotes"
+                  placeholder="Add any notes about this salary confirmation..."
+                  value={confirmNotes}
+                  onChange={(e) => setConfirmNotes(e.target.value)}
+                  rows={2}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleConfirmSalary} 
+                disabled={confirming || !confirmSalaryValue}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                {confirming ? 'Confirming...' : 'Confirm Salary'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
