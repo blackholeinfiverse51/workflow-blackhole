@@ -137,6 +137,8 @@ router.post('/start-day/:userId', auth, async (req, res) => {
       existingRecord.workPattern = workFromHome ? 'Remote' : 'Regular';
       existingRecord.isPresent = true;
       existingRecord.isVerified = locationValidated;
+      existingRecord.spamStatus = 'Valid'; // Normal start-day flow - not spam
+      existingRecord.autoEnded = false;
       
       if (existingRecord.source === 'Biometric') {
         existingRecord.source = 'Both';
@@ -160,7 +162,9 @@ router.post('/start-day/:userId', auth, async (req, res) => {
         workPattern: workFromHome ? 'Remote' : 'Regular',
         isPresent: true,
         isVerified: locationValidated,
-        source: 'StartDay'
+        source: 'StartDay',
+        spamStatus: 'Valid', // Normal start-day flow - not spam
+        autoEnded: false
       });
     }
     
@@ -187,6 +191,8 @@ router.post('/start-day/:userId', auth, async (req, res) => {
       dailyRecord.isPresent = true;
       dailyRecord.status = 'Present';
       dailyRecord.source = 'StartDay';
+      dailyRecord.spamStatus = 'Valid'; // Normal start-day flow - not spam
+      dailyRecord.autoEnded = false;
     } else {
       // Create new daily record
       dailyRecord = new DailyAttendance({
@@ -202,7 +208,9 @@ router.post('/start-day/:userId', auth, async (req, res) => {
         workLocationType: workLocationType,
         isPresent: true,
         status: 'Present',
-        source: 'StartDay'
+        source: 'StartDay',
+        spamStatus: 'Valid', // Normal start-day flow - not spam
+        autoEnded: false
       });
     }
     
@@ -376,6 +384,8 @@ router.post('/end-day/:userId', auth, async (req, res) => {
     // Mark as verified since it's manually ended with validations
     attendanceRecord.isVerified = true;
     attendanceRecord.approvalStatus = 'Auto-Approved';
+    attendanceRecord.spamStatus = 'Valid'; // Normal end-day flow - not spam
+    attendanceRecord.autoEnded = false;
 
     await attendanceRecord.save();
     
@@ -403,6 +413,8 @@ router.post('/end-day/:userId', auth, async (req, res) => {
       dailyRecord.dailyAimCompleted = todayAim ? (todayAim.completionStatus !== 'Pending') : false;
       dailyRecord.aimCompletionStatus = todayAim?.completionStatus || 'Not Set';
       dailyRecord.aimCompletionComment = todayAim?.completionComment || '';
+      dailyRecord.spamStatus = 'Valid'; // Normal end-day flow - not spam
+      dailyRecord.autoEnded = false;
       
       await dailyRecord.save();
     }

@@ -184,7 +184,7 @@ const dailyAttendanceSchema = new mongoose.Schema({
   spamStatus: {
     type: String,
     enum: ['Valid', 'Suspicious', 'Spam', 'Pending Review'],
-    default: 'Valid',
+    default: 'Pending Review',
     index: true
   },
   spamReason: {

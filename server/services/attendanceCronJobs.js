@@ -96,7 +96,9 @@ function startAttendancePersistenceCron() {
             dailyAimCompleted: aim ? (aim.completionStatus !== 'Pending') : false,
             aimCompletionStatus: aim?.completionStatus || 'Not Set',
             aimCompletionComment: aim?.completionComment || '',
-            autoEnded: attendance.autoEnded || false
+            autoEnded: attendance.autoEnded || false,
+            spamStatus: (attendance.autoEnded) ? 'Pending Review' : 'Valid',
+            spamReason: (attendance.autoEnded) ? (attendance.spamReason || 'Auto-ended by system') : undefined
           });
         } else {
           // Update existing record
@@ -108,6 +110,10 @@ function startAttendancePersistenceCron() {
           dailyRecord.aimCompletionStatus = aim?.completionStatus || 'Not Set';
           dailyRecord.aimCompletionComment = aim?.completionComment || '';
           dailyRecord.autoEnded = attendance.autoEnded || false;
+          dailyRecord.spamStatus = (attendance.autoEnded) ? 'Pending Review' : 'Valid';
+          if (attendance.autoEnded && attendance.spamReason) {
+            dailyRecord.spamReason = attendance.spamReason;
+          }
         }
 
         await dailyRecord.save();
