@@ -431,6 +431,28 @@ function AllAims() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">All Aims</h1>
           <p className="text-muted-foreground">View and manage daily aims across all departments</p>
+          
+          {/* Stats Summary */}
+          <div className="flex items-center gap-4 mt-3 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-md font-medium">
+                <User className="h-4 w-4" />
+                <span>Total Present: {aims.length}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 rounded-md font-medium">
+                <CheckCircle className="h-4 w-4" />
+                <span>Aims Set: {aims.filter(aim => aim.aim && aim.aim.trim() !== '').length}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 rounded-md font-medium">
+                <AlertCircle className="h-4 w-4" />
+                <span>Aims Not Set: {aims.filter(aim => !aim.aim || aim.aim.trim() === '').length}</span>
+              </div>
+            </div>
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Button variant="outline" onClick={handleRefresh}>
