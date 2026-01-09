@@ -163,28 +163,30 @@
 //   }
 // })
 
-// // @route   POST api/notifications/toggle-automation
-// // @desc    Toggle automation settings for reminders
-// // @access  Private (Admin only)
-// router.post("/toggle-automation", async (req, res) => {
-//   try {
-//     const { automateAimReminders, automateProgressReminders } = req.body;
+// @route   POST api/notifications/toggle-automation
+// @desc    Toggle automation settings for reminders
+// @access  Private (Admin only)
+router.post("/toggle-automation", async (req, res) => {
+  try {
+    const { automateAimReminders, automateProgressReminders } = req.body;
     
-//     // In a real implementation, you would save these settings to a database
-//     // For now, we'll just return success
+    // In a real implementation, you would save these settings to a database
+    // For now, we'll just return success
+    console.log("Automation settings updated:", { automateAimReminders, automateProgressReminders });
     
-//     res.json({
-//       msg: "Automation settings updated",
-//       settings: {
-//         automateAimReminders,
-//         automateProgressReminders
-//       }
-//     });
-//   } catch (err) {
-//     console.error(err.message);
-//     res.status(500).send("Server Error");
-//   }
-// });
+    res.json({
+      success: true,
+      msg: "Automation settings updated successfully",
+      settings: {
+        automateAimReminders,
+        automateProgressReminders
+      }
+    });
+  } catch (err) {
+    console.error("Toggle automation error:", err.message);
+    res.status(500).json({ success: false, error: "Server Error" });
+  }
+});
 
 // module.exports = router
 
