@@ -163,34 +163,6 @@
 //   }
 // })
 
-// @route   POST api/notifications/toggle-automation
-// @desc    Toggle automation settings for reminders
-// @access  Private (Admin only)
-router.post("/toggle-automation", async (req, res) => {
-  try {
-    const { automateAimReminders, automateProgressReminders } = req.body;
-    
-    // In a real implementation, you would save these settings to a database
-    // For now, we'll just return success
-    console.log("Automation settings updated:", { automateAimReminders, automateProgressReminders });
-    
-    res.json({
-      success: true,
-      msg: "Automation settings updated successfully",
-      settings: {
-        automateAimReminders,
-        automateProgressReminders
-      }
-    });
-  } catch (err) {
-    console.error("Toggle automation error:", err.message);
-    res.status(500).json({ success: false, error: "Server Error" });
-  }
-});
-
-// module.exports = router
-
-
 const express = require("express")
 const router = express.Router()
 const nodemailer = require("nodemailer")
@@ -464,6 +436,31 @@ router.post("/broadcast-aim-reminders", async (req, res) => {
     res.status(500).send({ message: "Error broadcasting daily aims reminders.", error: error.message })
   }
 })
+
+// @route   POST api/notifications/toggle-automation
+// @desc    Toggle automation settings for reminders
+// @access  Private (Admin only)
+router.post("/toggle-automation", async (req, res) => {
+  try {
+    const { automateAimReminders, automateProgressReminders } = req.body;
+    
+    // In a real implementation, you would save these settings to a database
+    // For now, we'll just return success
+    console.log("Automation settings updated:", { automateAimReminders, automateProgressReminders });
+    
+    res.json({
+      success: true,
+      msg: "Automation settings updated successfully",
+      settings: {
+        automateAimReminders,
+        automateProgressReminders
+      }
+    });
+  } catch (err) {
+    console.error("Toggle automation error:", err.message);
+    res.status(500).json({ success: false, error: "Server Error" });
+  }
+});
 
 module.exports = router
 
