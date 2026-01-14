@@ -403,6 +403,7 @@ router.get('/hours/all', auth, adminAuth, async (req, res) => {
     // Aggregate hours from DailyAttendance (PRIMARY SOURCE - most reliable)
     let recordsProcessed = 0;
     let recordsSkipped = 0;
+    let midnightSpanRecords = [];
     
     dailyAttendanceRecords.forEach(record => {
       if (!record.user) {
@@ -430,9 +431,52 @@ router.get('/hours/all', auth, adminAuth, async (req, res) => {
         }
         
         if (startTime && endTime) {
-          const timeDiff = endTime.getTime() - startTime.getTime();
-          const breakMinutes = record.breakTime || 0;
-          hours = Math.max(0, (timeDiff / (1000 * 60 * 60)) - (breakMinutes / 60));
+          // SPAN DETECTION: Check if session crosses midnight
+          const startDate = new Date(startTime);
+          startDate.setHours(0, 0, 0, 0);
+          const endDate = new Date(endTime);
+          endDate.setHours(0, 0, 0, 0);
+          
+          const spansMidnight = startDate.getTime() !== endDate.getTime();
+          
+          if (spansMidnight) {
+            // Session spans across midnight - split it
+            const midnight = new Date(startDate);
+            midnight.setDate(midnight.getDate() + 1);
+            midnight.setHours(0, 0, 0, 0);
+            
+            // Calculate hours for each day
+            const hoursBeforeMidnight = (midnight.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+            const hoursAfterMidnight = (endTime.getTime() - midnight.getTime()) / (1000 * 60 * 60);
+            
+            // Store span info for admin validation
+            midnightSpanRecords.push({
+              userId,
+              recordId: record._id,
+              startTime: startTime,
+              endTime: endTime,
+              midnight: midnight,
+              hoursBeforeMidnight: Math.round(hoursBeforeMidnight * 100) / 100,
+              hoursAfterMidnight: Math.round(hoursAfterMidnight * 100) / 100,
+              spamStatus: record.spamStatus || 'Pending Review',
+              needsValidation: true
+            });
+            
+            console.log(`⚠️ MIDNIGHT SPAN DETECTED for user ${userId}:`);
+            console.log(`   Start: ${startTime.toISOString()}`);
+            console.log(`   End: ${endTime.toISOString()}`);
+            console.log(`   Hours before midnight: ${hoursBeforeMidnight.toFixed(2)}h`);
+            console.log(`   Hours after midnight: ${hoursAfterMidnight.toFixed(2)}h`);
+            
+            // Use total hours but mark for admin validation
+            hours = hoursBeforeMidnight + hoursAfterMidnight;
+          } else {
+            // Normal same-day session
+            const timeDiff = endTime.getTime() - startTime.getTime();
+            const breakMinutes = record.breakTime || 0;
+            hours = Math.max(0, (timeDiff / (1000 * 60 * 60)) - (breakMinutes / 60));
+          }
+          
           hours = Math.round(hours * 100) / 100; // Round to 2 decimal places
         }
       }
@@ -928,7 +972,12 @@ router.get('/hours/:userId', auth, async (req, res) => {
           from: startDate.toISOString(),
           to: endDate.toISOString()
         },
-        totalDays: hoursData.length
+        totalDays: hoursData.length,
+        midnightSpans: midnightSpanRecords.length > 0 ? {
+          count: midnightSpanRecords.length,
+          records: midnightSpanRecords,
+          warning: 'Sessions spanning midnight require admin validation for fixed 8-hour allocation'
+        } : null
       }
     });
   } catch (error) {
@@ -942,6 +991,90 @@ router.get('/hours/:userId', auth, async (req, res) => {
  * SALARY CALCULATION SECTION
  * ============================================
  */
+
+/**
+ * POST /api/new-salary/validate-midnight-span/:recordId
+ * Admin validates midnight span record - grants fixed 8 hours
+ */
+router.post('/validate-midnight-span/:recordId', auth, adminAuth, async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    const { reason, notes } = req.body;
+
+    // Find the attendance record
+    const record = await DailyAttendance.findById(recordId).populate('user', 'name email');
+    
+    if (!record) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Record not found' 
+      });
+    }
+
+    // Calculate actual hours if needed
+    let actualHours = record.totalHoursWorked || 0;
+    
+    if (actualHours === 0 && record.startDayTime && record.endDayTime) {
+      const startTime = new Date(record.startDayTime);
+      const endTime = new Date(record.endDayTime);
+      actualHours = (endTime - startTime) / (1000 * 60 * 60);
+    }
+
+    // FIXED 8 HOURS for midnight span validation
+    const validatedHours = 8;
+
+    // Update record
+    record.totalHoursWorked = validatedHours;
+    record.spamStatus = 'Valid';
+    record.validatedBy = req.user.id;
+    record.validatedAt = new Date();
+    record.validationReason = reason || 'Admin validated midnight span session';
+    record.validationNotes = notes || '';
+    record.systemNotes = `Midnight span validated. Actual: ${actualHours.toFixed(2)}h → Fixed: ${validatedHours}h`;
+
+    await record.save();
+
+    // Also update Attendance record if exists
+    const attendanceRecord = await Attendance.findOne({
+      user: record.user._id,
+      date: record.date
+    });
+
+    if (attendanceRecord) {
+      attendanceRecord.hoursWorked = validatedHours;
+      attendanceRecord.spamStatus = 'Valid';
+      attendanceRecord.validatedBy = req.user.id;
+      attendanceRecord.validatedAt = new Date();
+      attendanceRecord.systemNotes = `Midnight span validated: ${validatedHours}h fixed`;
+      await attendanceRecord.save();
+    }
+
+    console.log(`✅ Validated midnight span for ${record.user.name}: ${actualHours.toFixed(2)}h → ${validatedHours}h`);
+
+    res.json({
+      success: true,
+      message: `Validated midnight span session - User receives ${validatedHours} fixed hours`,
+      data: {
+        recordId: record._id,
+        userId: record.user._id,
+        userName: record.user.name,
+        actualHours: Math.round(actualHours * 100) / 100,
+        validatedHours: validatedHours,
+        rule: 'Midnight span validation always grants 8 fixed hours',
+        validatedBy: req.user.name || req.user.email,
+        validatedAt: new Date()
+      }
+    });
+
+  } catch (error) {
+    console.error('Validate midnight span error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to validate midnight span', 
+      details: error.message 
+    });
+  }
+});
 
 /**
  * POST /api/new-salary/calculate

@@ -180,6 +180,22 @@ const dailyAttendanceSchema = new mongoose.Schema({
     type: Number,
     default: 8
   },
+  
+  // Midnight span tracking
+  spanType: {
+    type: String,
+    enum: ['NORMAL', 'MIDNIGHT_SPAN'],
+    default: 'NORMAL',
+    index: true
+  },
+  spanDetails: {
+    startDate: String,
+    endDate: String,
+    actualHours: Number,
+    fixedHours: Number,
+    splitRequired: Boolean
+  },
+  
   // Spam detection and validation
   spamStatus: {
     type: String,

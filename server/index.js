@@ -527,14 +527,24 @@ const midnightAutoEndJob = async () => {
           continue;
         }
 
+        // MIDNIGHT SPAN LOGIC: Session spans from one day to next
+        const spanType = 'MIDNIGHT_SPAN';
+        
         // Auto end the day at midnight
         record.endDayTime = midnightTime;
         record.hoursWorked = Math.round(hoursWorked * 100) / 100;
         record.autoEnded = true;
         record.spamStatus = 'Pending Review';
-        record.spamReason = 'User did not click End Day before midnight - auto-ended by system';
-        record.systemNotes = `Auto-ended at midnight. Original hours: ${record.hoursWorked}h. Admin validation grants exactly ${SPAM_VALIDATION_HOURS}h`;
-        record.employeeNotes = (record.employeeNotes || '') + ' [Auto-ended at midnight - Pending admin review]';
+        record.spamReason = 'Session spans midnight - auto-ended by system';
+        record.spanType = spanType; // Mark as midnight span
+        record.spanDetails = {
+          startDate: yesterday.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0],
+          actualHours: Math.round(hoursWorked * 100) / 100,
+          fixedHours: SPAM_VALIDATION_HOURS
+        };
+        record.systemNotes = `Midnight span detected. Hours: ${record.hoursWorked}h. Admin validation grants ${SPAM_VALIDATION_HOURS}h fixed`;
+        record.employeeNotes = (record.employeeNotes || '') + ' [Auto-ended at midnight - Span session pending admin review]';
         record.overtimeHours = 0;
         record.approvalStatus = 'Pending';
 
@@ -554,8 +564,10 @@ const midnightAutoEndJob = async () => {
           dailyRecord.totalHoursWorked = record.hoursWorked;
           dailyRecord.autoEnded = true;
           dailyRecord.spamStatus = 'Pending Review';
-          dailyRecord.spamReason = 'User did not click End Day before midnight';
-          dailyRecord.systemNotes = `Auto-ended at midnight. Actual hours: ${record.hoursWorked}h. Admin validation grants exactly ${SPAM_VALIDATION_HOURS}h`;
+          dailyRecord.spamReason = 'Session spans midnight - requires validation';
+          dailyRecord.spanType = 'MIDNIGHT_SPAN';
+          dailyRecord.spanDetails = record.spanDetails;
+          dailyRecord.systemNotes = `Midnight span: ${record.hoursWorked}h actual → ${SPAM_VALIDATION_HOURS}h fixed on validation`;
           await dailyRecord.save();
         }
 

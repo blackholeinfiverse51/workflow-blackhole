@@ -641,13 +641,19 @@ router.post('/validate-spam-hours/:recordId', auth, adminAuth, async (req, res) 
 
     // SIMPLE RULE: Spam validation = EXACTLY 8 hours (not more, not less)
     const validatedHours = 8;
+    
+    // Detect if this is a midnight span
+    const isMidnightSpan = record.spanType === 'MIDNIGHT_SPAN' || 
+                           (record.spamReason && record.spamReason.toLowerCase().includes('midnight'));
 
     // Update record with EXACTLY 8 hours
     record.hoursWorked = validatedHours;
     record.spamStatus = 'Valid';
     record.validatedBy = req.user.id;
     record.validatedAt = new Date();
-    record.spamReason = reason || `Admin validated - User gets exactly 8 hours (actual: ${originalHours}h)`;
+    record.spamReason = reason || (isMidnightSpan 
+      ? `Midnight span validated - Fixed ${validatedHours}h granted (actual: ${originalHours}h)` 
+      : `Admin validated - User gets exactly ${validatedHours} hours (actual: ${originalHours}h)`);
     record.approvalStatus = 'Approved';
 
     await record.save();
