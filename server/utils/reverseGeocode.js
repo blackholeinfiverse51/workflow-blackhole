@@ -14,11 +14,35 @@ async function reverseGeocode(latitude, longitude) {
     
     const options = {
       headers: {
-        'User-Agent': 'Infiverse Attendance System'
-      }
+        'User-Agent': 'Infiverse-Attendance-System/1.0 (https://infiverse.com)',
+        'Accept': 'application/json'
+      },
+      timeout: 10000 // 10 second timeout
     };
 
-    https.get(url, options, (res) => {
+    const req = https.get(url, options, (res) => {
+      // Check for rate limiting or errors
+      if (res.statusCode === 429) {
+        console.warn('Nominatim rate limit hit, using fallback');
+        fallbackReverseGeocode(latitude, longitude)
+          .then(resolve)
+          .catch(() => {
+            // Last resort: return coordinates
+            resolve(createFallbackAddress(latitude, longitude));
+          });
+        return;
+      }
+
+      if (res.statusCode !== 200) {
+        console.warn(`Nominatim returned status ${res.statusCode}, using fallback`);
+        fallbackReverseGeocode(latitude, longitude)
+          .then(resolve)
+          .catch(() => {
+            resolve(createFallbackAddress(latitude, longitude));
+          });
+        return;
+      }
+
       let data = '';
 
       res.on('data', (chunk) => {
@@ -28,6 +52,18 @@ async function reverseGeocode(latitude, longitude) {
       res.on('end', () => {
         try {
           const result = JSON.parse(data);
+          
+          // Check if result has error
+          if (result.error) {
+            console.warn('Nominatim error:', result.error);
+            fallbackReverseGeocode(latitude, longitude)
+              .then(resolve)
+              .catch(() => {
+                resolve(createFallbackAddress(latitude, longitude));
+              });
+            return;
+          }
+
           const address = result.address || {};
           
           // Build formatted address
@@ -58,19 +94,55 @@ async function reverseGeocode(latitude, longitude) {
             raw: result
           });
         } catch (error) {
+          console.warn('Error parsing Nominatim response:', error.message);
           // Fallback to bigdatacloud API
           fallbackReverseGeocode(latitude, longitude)
             .then(resolve)
-            .catch(reject);
+            .catch(() => {
+              resolve(createFallbackAddress(latitude, longitude));
+            });
         }
       });
-    }).on('error', (error) => {
+    });
+
+    req.on('error', (error) => {
+      console.warn('Nominatim request error:', error.message);
       // Fallback to bigdatacloud API
       fallbackReverseGeocode(latitude, longitude)
         .then(resolve)
-        .catch(reject);
+        .catch(() => {
+          resolve(createFallbackAddress(latitude, longitude));
+        });
     });
+
+    req.on('timeout', () => {
+      req.destroy();
+      console.warn('Nominatim request timeout, using fallback');
+      fallbackReverseGeocode(latitude, longitude)
+        .then(resolve)
+        .catch(() => {
+          resolve(createFallbackAddress(latitude, longitude));
+        });
+    });
+
+    req.setTimeout(10000);
   });
+}
+
+// Helper function to create fallback address
+function createFallbackAddress(latitude, longitude) {
+  return {
+    fullAddress: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+    displayName: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+    pincode: null,
+    area: null,
+    city: null,
+    state: null,
+    country: null,
+    road: null,
+    houseNumber: null,
+    raw: null
+  };
 }
 
 /**
@@ -84,7 +156,14 @@ async function fallbackReverseGeocode(latitude, longitude) {
   return new Promise((resolve, reject) => {
     const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`;
     
-    https.get(url, (res) => {
+    const req = https.get(url, {
+      timeout: 10000
+    }, (res) => {
+      if (res.statusCode !== 200) {
+        resolve(createFallbackAddress(latitude, longitude));
+        return;
+      }
+
       let data = '';
 
       res.on('data', (chunk) => {
@@ -112,36 +191,23 @@ async function fallbackReverseGeocode(latitude, longitude) {
             raw: result
           });
         } catch (error) {
-          // Last resort: return coordinates
-          resolve({
-            fullAddress: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-            displayName: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-            pincode: null,
-            area: null,
-            city: null,
-            state: null,
-            country: null,
-            road: null,
-            houseNumber: null,
-            raw: null
-          });
+          console.warn('Error parsing BigDataCloud response:', error.message);
+          resolve(createFallbackAddress(latitude, longitude));
         }
       });
-    }).on('error', (error) => {
-      // Last resort: return coordinates
-      resolve({
-        fullAddress: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-        displayName: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-        pincode: null,
-        area: null,
-        city: null,
-        state: null,
-        country: null,
-        road: null,
-        houseNumber: null,
-        raw: null
-      });
     });
+
+    req.on('error', (error) => {
+      console.warn('BigDataCloud request error:', error.message);
+      resolve(createFallbackAddress(latitude, longitude));
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(createFallbackAddress(latitude, longitude));
+    });
+
+    req.setTimeout(10000);
   });
 }
 

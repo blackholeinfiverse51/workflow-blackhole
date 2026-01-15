@@ -99,13 +99,14 @@ router.post('/start-day/:userId', auth, async (req, res) => {
       if (!address || address === 'Work From Home' || address.toLowerCase().includes('work from home')) {
         try {
           const geocodeResult = await reverseGeocode(latitude, longitude);
-          address = geocodeResult.fullAddress || geocodeResult.displayName || address;
+          // Always use the full address from geocoding result
+          address = geocodeResult.fullAddress || geocodeResult.displayName || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
           console.log(`📍 User ${userId} starting work from home at: ${address} (${latitude}, ${longitude})`);
         } catch (error) {
           console.warn(`⚠️ Reverse geocoding failed for WFH location: ${error.message}`);
-          // Keep the provided address or use coordinates as fallback
-          address = address || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-          console.log(`📍 User ${userId} starting work from home at coordinates: ${latitude}, ${longitude}`);
+          // Always provide coordinates as fallback address
+          address = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+          console.log(`📍 User ${userId} starting work from home at coordinates: ${address}`);
         }
       } else {
         console.log(`📍 User ${userId} starting work from home at: ${address} (${latitude}, ${longitude})`);
@@ -137,6 +138,19 @@ router.post('/start-day/:userId', auth, async (req, res) => {
     
     const startTime = new Date();
     
+    // Always reverse geocode to get detailed address (for both office and WFH)
+    let finalAddress = address;
+    if (!finalAddress || finalAddress === 'Work From Home' || finalAddress === 'Office Location' || finalAddress.toLowerCase().includes('work from home')) {
+      try {
+        const geocodeResult = await reverseGeocode(latitude, longitude);
+        finalAddress = geocodeResult.fullAddress || geocodeResult.displayName || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        console.log(`📍 User ${userId} location geocoded: ${finalAddress} (${latitude}, ${longitude})`);
+      } catch (error) {
+        console.warn(`⚠️ Reverse geocoding failed: ${error.message}`);
+        finalAddress = finalAddress || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+      }
+    }
+    
     // Create or update attendance record
     let attendanceRecord;
     
@@ -146,7 +160,7 @@ router.post('/start-day/:userId', auth, async (req, res) => {
       existingRecord.startDayLocation = {
         latitude,
         longitude,
-        address: address || (workFromHome ? 'Work From Home' : 'Office Location'),
+        address: finalAddress,
         accuracy
       };
       existingRecord.workPattern = workFromHome ? 'Remote' : 'Regular';
@@ -171,7 +185,7 @@ router.post('/start-day/:userId', auth, async (req, res) => {
         startDayLocation: {
           latitude,
           longitude,
-          address: address || (workFromHome ? 'Work From Home' : 'Office Location'),
+          address: finalAddress,
           accuracy
         },
         workPattern: workFromHome ? 'Remote' : 'Regular',
@@ -199,7 +213,7 @@ router.post('/start-day/:userId', auth, async (req, res) => {
       dailyRecord.startDayLocation = {
         latitude,
         longitude,
-        address: address || (workFromHome ? 'Work From Home' : 'Office Location'),
+        address: finalAddress,
         accuracy
       };
       dailyRecord.workLocationType = workLocationType;
@@ -217,7 +231,7 @@ router.post('/start-day/:userId', auth, async (req, res) => {
         startDayLocation: {
           latitude,
           longitude,
-          address: address || (workFromHome ? 'Work From Home' : 'Office Location'),
+          address: finalAddress,
           accuracy
         },
         workLocationType: workLocationType,
@@ -376,12 +390,14 @@ router.post('/end-day/:userId', auth, async (req, res) => {
       if (latitude && longitude) {
         try {
           const geocodeResult = await reverseGeocode(latitude, longitude);
-          endDayAddress = geocodeResult.fullAddress || geocodeResult.displayName || endDayAddress;
+          endDayAddress = geocodeResult.fullAddress || geocodeResult.displayName || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
           console.log(`📍 User ${userId} ending WFH day at: ${endDayAddress} (${latitude}, ${longitude})`);
         } catch (error) {
           console.warn(`⚠️ Reverse geocoding failed for WFH end location: ${error.message}`);
-          endDayAddress = endDayAddress || (latitude && longitude ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` : 'Work From Home');
+          endDayAddress = latitude && longitude ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` : 'Work From Home';
         }
+      } else {
+        endDayAddress = endDayAddress || 'Work From Home';
       }
     }
     
@@ -900,6 +916,77 @@ router.post('/auto-end-day', auth, async (req, res) => {
 // });
 
 // Get attendance analytics
+// Reverse geocode endpoint (for frontend to get address details)
+// IMPORTANT: This route must be defined before parameterized routes like /user/:userId
+router.get('/reverse-geocode', auth, async (req, res) => {
+  try {
+    const { latitude, longitude } = req.query;
+    
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        success: false,
+        error: 'Latitude and longitude are required'
+      });
+    }
+    
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    
+    if (isNaN(lat) || isNaN(lng)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid latitude or longitude'
+      });
+    }
+    
+    console.log(`📍 Reverse geocoding request for: ${lat}, ${lng}`);
+    const geocodeResult = await reverseGeocode(lat, lng);
+    console.log(`✅ Reverse geocoding result:`, {
+      fullAddress: geocodeResult.fullAddress,
+      area: geocodeResult.area,
+      city: geocodeResult.city,
+      state: geocodeResult.state,
+      pincode: geocodeResult.pincode
+    });
+    
+    // Build formatted address from components
+    const addressParts = [];
+    if (geocodeResult.houseNumber) addressParts.push(geocodeResult.houseNumber);
+    if (geocodeResult.road) addressParts.push(geocodeResult.road);
+    if (geocodeResult.area) addressParts.push(geocodeResult.area);
+    if (geocodeResult.city) addressParts.push(geocodeResult.city);
+    if (geocodeResult.state) addressParts.push(geocodeResult.state);
+    if (geocodeResult.pincode) addressParts.push(geocodeResult.pincode);
+    if (geocodeResult.country) addressParts.push(geocodeResult.country);
+    
+    const formattedAddress = addressParts.length > 0 
+      ? addressParts.join(', ')
+      : geocodeResult.fullAddress || geocodeResult.displayName;
+    
+    res.json({
+      success: true,
+      data: {
+        fullAddress: geocodeResult.fullAddress || geocodeResult.displayName,
+        displayName: geocodeResult.displayName,
+        pincode: geocodeResult.pincode || 'N/A',
+        area: geocodeResult.area || 'N/A',
+        city: geocodeResult.city || 'N/A',
+        state: geocodeResult.state || 'N/A',
+        country: geocodeResult.country || 'N/A',
+        road: geocodeResult.road || 'N/A',
+        houseNumber: geocodeResult.houseNumber || 'N/A',
+        formattedAddress: formattedAddress || geocodeResult.fullAddress || geocodeResult.displayName
+      }
+    });
+  } catch (error) {
+    console.error('❌ Reverse geocoding error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to reverse geocode location'
+    });
+  }
+});
+
 router.get('/analytics', auth, async (req, res) => {
   try {
     const { startDate, endDate, userId, department } = req.query;

@@ -117,76 +117,84 @@ function MapController({ onMapReady, targetLocation }) {
 }
 
 // Function to get detailed address from coordinates (reverse geocoding)
+// Uses backend API to avoid CORS issues in production
 const getDetailedAddress = async (lat, lng) => {
   try {
-    // Using OpenStreetMap Nominatim API (free, no API key required)
+    const token = localStorage.getItem("WorkflowToken");
+    const API_URL = import.meta.env.VITE_API_URL || 
+      (typeof window !== 'undefined' && window.location.origin.includes('vercel.app')
+        ? 'https://blackholeworkflow.onrender.com/api'
+        : typeof window !== 'undefined' 
+          ? `${window.location.origin}/api`
+          : 'http://localhost:5000/api');
+
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      `${API_URL}/attendance/reverse-geocode?latitude=${lat}&longitude=${lng}`,
       {
         headers: {
-          'User-Agent': 'Infiverse Attendance System'
+          'Content-Type': 'application/json',
+          ...(token && { 'x-auth-token': token })
         }
       }
     );
     
     if (!response.ok) {
-      throw new Error('Failed to fetch address');
+      throw new Error(`API error: ${response.statusText}`);
     }
     
-    const data = await response.json();
-    const address = data.address || {};
+    const result = await response.json();
     
-    return {
-      fullAddress: data.display_name || 'Address not available',
-      pincode: address.postcode || address.pincode || 'N/A',
-      area: address.suburb || address.neighbourhood || address.locality || address.city_district || 'N/A',
-      city: address.city || address.town || address.village || address.county || 'N/A',
-      state: address.state || 'N/A',
-      country: address.country || 'N/A',
-      road: address.road || address.street || 'N/A',
-      houseNumber: address.house_number || 'N/A',
-      formattedAddress: [
-        address.house_number,
-        address.road,
-        address.suburb || address.neighbourhood,
-        address.city || address.town,
-        address.state,
-        address.postcode,
-        address.country
-      ].filter(Boolean).join(', ')
-    };
+    if (result.success && result.data) {
+      // Build formatted address from components (prioritize components over fullAddress)
+      const addressParts = [];
+      if (result.data.houseNumber && result.data.houseNumber !== 'N/A' && result.data.road && result.data.road !== 'N/A') {
+        addressParts.push(`${result.data.houseNumber} ${result.data.road}`);
+      } else if (result.data.road && result.data.road !== 'N/A') {
+        addressParts.push(result.data.road);
+      }
+      if (result.data.area && result.data.area !== 'N/A') addressParts.push(result.data.area);
+      if (result.data.city && result.data.city !== 'N/A') addressParts.push(result.data.city);
+      if (result.data.state && result.data.state !== 'N/A') addressParts.push(result.data.state);
+      if (result.data.pincode && result.data.pincode !== 'N/A') addressParts.push(result.data.pincode);
+      if (result.data.country && result.data.country !== 'N/A') addressParts.push(result.data.country);
+      
+      // Check if fullAddress is coordinates
+      const isCoordinates = result.data.fullAddress && /^-?\d+\.?\d*,\s*-?\d+\.?\d*$/.test(result.data.fullAddress.trim());
+      
+      const formattedAddress = addressParts.length > 0 
+        ? addressParts.join(', ')
+        : (result.data.fullAddress && !isCoordinates)
+          ? result.data.fullAddress
+          : null;
+      
+      return {
+        fullAddress: formattedAddress || (result.data.fullAddress && !isCoordinates ? result.data.fullAddress : null),
+        pincode: result.data.pincode || 'N/A',
+        area: result.data.area || 'N/A',
+        city: result.data.city || 'N/A',
+        state: result.data.state || 'N/A',
+        country: result.data.country || 'N/A',
+        road: result.data.road || 'N/A',
+        houseNumber: result.data.houseNumber || 'N/A',
+        formattedAddress: formattedAddress || (result.data.formattedAddress && !isCoordinates ? result.data.formattedAddress : null)
+      };
+    } else {
+      throw new Error(result.error || 'Failed to get address');
+    }
   } catch (error) {
     console.warn('Reverse geocoding failed:', error);
-    // Fallback to bigdatacloud API
-    try {
-      const fallbackResponse = await fetch(
-        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
-      );
-      const fallbackData = await fallbackResponse.json();
-      return {
-        fullAddress: fallbackData.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-        pincode: fallbackData.postcode || 'N/A',
-        area: fallbackData.locality || fallbackData.city || 'N/A',
-        city: fallbackData.city || fallbackData.locality || 'N/A',
-        state: fallbackData.principalSubdivision || 'N/A',
-        country: fallbackData.countryName || 'N/A',
-        road: 'N/A',
-        houseNumber: 'N/A',
-        formattedAddress: fallbackData.display_name || 'Address not available'
-      };
-    } catch (fallbackError) {
-      return {
-        fullAddress: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-        pincode: 'N/A',
-        area: 'N/A',
-        city: 'N/A',
-        state: 'N/A',
-        country: 'N/A',
-        road: 'N/A',
-        houseNumber: 'N/A',
-        formattedAddress: 'Address not available'
-      };
-    }
+    // Fallback: return coordinates as address
+    return {
+      fullAddress: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+      pincode: 'N/A',
+      area: 'N/A',
+      city: 'N/A',
+      state: 'N/A',
+      country: 'N/A',
+      road: 'N/A',
+      houseNumber: 'N/A',
+      formattedAddress: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+    };
   }
 };
 
@@ -264,9 +272,16 @@ const LiveAttendanceMap = ({ attendance }) => {
         !loadingAddress[`${emp.location.latitude}_${emp.location.longitude}`]
       );
       
-      // Process in batches to respect API rate limits
-      for (const employee of employeesToFetch.slice(0, 10)) {
+      // Process all employees with rate limiting (not just first 10)
+      for (let i = 0; i < employeesToFetch.length; i++) {
+        const employee = employeesToFetch[i];
         const key = `${employee.location.latitude}_${employee.location.longitude}`;
+        
+        // Skip if already loading or loaded
+        if (loadingAddress[key] || addressDetails[key]) {
+          continue;
+        }
+        
         setLoadingAddress(prev => ({ ...prev, [key]: true }));
         
         try {
@@ -277,12 +292,29 @@ const LiveAttendanceMap = ({ attendance }) => {
           setAddressDetails(prev => ({ ...prev, [key]: details }));
         } catch (error) {
           console.error('Error fetching address details:', error);
+          // Store fallback address if geocoding fails
+          setAddressDetails(prev => ({ 
+            ...prev, 
+            [key]: {
+              fullAddress: employee.location?.address || `${employee.location.latitude.toFixed(6)}, ${employee.location.longitude.toFixed(6)}`,
+              pincode: 'N/A',
+              area: 'N/A',
+              city: 'N/A',
+              state: 'N/A',
+              country: 'N/A',
+              road: 'N/A',
+              houseNumber: 'N/A',
+              formattedAddress: employee.location?.address || 'Address not available'
+            }
+          }));
         } finally {
           setLoadingAddress(prev => ({ ...prev, [key]: false }));
         }
         
-        // Add delay to respect API rate limits (1 request per second for Nominatim)
-        await new Promise(resolve => setTimeout(resolve, 1100));
+        // Add delay to respect API rate limits (1 request per second)
+        if (i < employeesToFetch.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1100));
+        }
       }
     };
     
@@ -291,6 +323,53 @@ const LiveAttendanceMap = ({ attendance }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeesWithLocation.length]); // Only run when employee list changes
+
+  // Fetch address for selected employee if not already loaded
+  useEffect(() => {
+    if (selectedEmployee?.location?.latitude && selectedEmployee?.location?.longitude) {
+      const key = `${selectedEmployee.location.latitude}_${selectedEmployee.location.longitude}`;
+      
+      // If address details not loaded and not currently loading, fetch them
+      if (!addressDetails[key] && !loadingAddress[key]) {
+        const fetchSelectedEmployeeAddress = async () => {
+          console.log('📍 Fetching address for selected employee:', selectedEmployee.name, key);
+          setLoadingAddress(prev => ({ ...prev, [key]: true }));
+          try {
+            const details = await getDetailedAddress(
+              selectedEmployee.location.latitude,
+              selectedEmployee.location.longitude
+            );
+            console.log('✅ Address details received:', details);
+            setAddressDetails(prev => ({ ...prev, [key]: details }));
+          } catch (error) {
+            console.error('❌ Error fetching address for selected employee:', error);
+            // Set fallback address
+            setAddressDetails(prev => ({ 
+              ...prev, 
+              [key]: {
+                fullAddress: selectedEmployee.location?.address || `${selectedEmployee.location.latitude.toFixed(6)}, ${selectedEmployee.location.longitude.toFixed(6)}`,
+                pincode: 'N/A',
+                area: 'N/A',
+                city: 'N/A',
+                state: 'N/A',
+                country: 'N/A',
+                road: 'N/A',
+                houseNumber: 'N/A',
+                formattedAddress: selectedEmployee.location?.address || 'Address not available'
+              }
+            }));
+          } finally {
+            setLoadingAddress(prev => ({ ...prev, [key]: false }));
+          }
+        };
+        
+        fetchSelectedEmployeeAddress();
+      } else {
+        console.log('📍 Address already loaded or loading for:', key, addressDetails[key] ? 'loaded' : 'loading');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEmployee]);
 
   // Calculate distance from office
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -850,9 +929,17 @@ const LiveAttendanceMap = ({ attendance }) => {
                                           )}
                                         </>
                                       ) : (
-                                        <p className="text-xs text-gray-800 font-medium mb-2 break-words">
-                                          {employee.location?.address || employee.workLocationType || 'Location not available'}
-                                        </p>
+                                        <div className="space-y-1">
+                                          {employee.location?.address && employee.location.address !== `${employee.location.latitude?.toFixed(6)}, ${employee.location.longitude?.toFixed(6)}` ? (
+                                            <p className="text-xs text-gray-800 font-medium mb-2 break-words">
+                                              {employee.location.address}
+                                            </p>
+                                          ) : (
+                                            <p className="text-xs text-gray-500 italic mb-2">
+                                              Loading address details...
+                                            </p>
+                                          )}
+                                        </div>
                                       )}
                                       <div className="flex items-center gap-2">
                                         <Navigation className={`w-3 h-3 ${isWFH ? 'text-purple-600' : (isWithinRadius ? 'text-green-600' : 'text-orange-600')}`} />
@@ -989,61 +1076,174 @@ const LiveAttendanceMap = ({ attendance }) => {
                             <p className="text-xs text-gray-600 mb-2 font-semibold">Exact Location Details:</p>
                             
                             {isLoading ? (
-                              <div className="text-xs text-gray-500">Loading address details...</div>
+                              <div className="text-xs text-gray-500 italic">Loading address details...</div>
                             ) : details ? (
                               <div className="space-y-2 text-xs">
-                                {details.road !== 'N/A' && details.houseNumber !== 'N/A' && (
-                                  <div>
-                                    <span className="text-gray-600 font-medium">Street Address: </span>
-                                    <span className="text-gray-800">{details.houseNumber} {details.road}</span>
-                                  </div>
-                                )}
-                                {details.area !== 'N/A' && (
-                                  <div>
-                                    <span className="text-gray-600 font-medium">Area: </span>
-                                    <span className="text-gray-800">{details.area}</span>
-                                  </div>
-                                )}
-                                {details.city !== 'N/A' && (
-                                  <div>
-                                    <span className="text-gray-600 font-medium">City: </span>
-                                    <span className="text-gray-800">{details.city}</span>
-                                  </div>
-                                )}
-                                {details.pincode !== 'N/A' && (
-                                  <div>
-                                    <span className="text-gray-600 font-medium">Pincode: </span>
-                                    <span className="text-gray-800 font-semibold">{details.pincode}</span>
-                                  </div>
-                                )}
-                                {details.state !== 'N/A' && (
-                                  <div>
-                                    <span className="text-gray-600 font-medium">State: </span>
-                                    <span className="text-gray-800">{details.state}</span>
-                                  </div>
-                                )}
-                                {details.country !== 'N/A' && (
-                                  <div>
-                                    <span className="text-gray-600 font-medium">Country: </span>
-                                    <span className="text-gray-800">{details.country}</span>
-                                  </div>
-                                )}
-                                <div className="mt-3 pt-2 border-t border-gray-300">
-                                  <p className="text-gray-600 font-medium mb-1">Full Address:</p>
-                                  <p className="text-gray-800 break-words">{details.formattedAddress || details.fullAddress}</p>
-                                </div>
+                                {/* Build address parts first */}
+                                {(() => {
+                                  const addressParts = [];
+                                  const hasComponents = details.road !== 'N/A' || details.houseNumber !== 'N/A' || 
+                                                       details.area !== 'N/A' || details.city !== 'N/A' || 
+                                                       details.state !== 'N/A' || details.pincode !== 'N/A';
+                                  
+                                  // Show individual components if available
+                                  if (hasComponents) {
+                                    return (
+                                      <>
+                                        {(details.road !== 'N/A' || details.houseNumber !== 'N/A') && (
+                                          <div>
+                                            <span className="text-gray-600 font-medium">Street Address: </span>
+                                            <span className="text-gray-800">
+                                              {details.houseNumber !== 'N/A' && details.road !== 'N/A' 
+                                                ? `${details.houseNumber} ${details.road}`
+                                                : details.road !== 'N/A' 
+                                                  ? details.road
+                                                  : details.houseNumber !== 'N/A'
+                                                    ? details.houseNumber
+                                                    : 'N/A'}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {details.area !== 'N/A' && (
+                                          <div>
+                                            <span className="text-gray-600 font-medium">Area: </span>
+                                            <span className="text-gray-800">{details.area}</span>
+                                          </div>
+                                        )}
+                                        {details.city !== 'N/A' && (
+                                          <div>
+                                            <span className="text-gray-600 font-medium">City: </span>
+                                            <span className="text-gray-800">{details.city}</span>
+                                          </div>
+                                        )}
+                                        {details.state !== 'N/A' && (
+                                          <div>
+                                            <span className="text-gray-600 font-medium">State: </span>
+                                            <span className="text-gray-800">{details.state}</span>
+                                          </div>
+                                        )}
+                                        {details.pincode !== 'N/A' && (
+                                          <div>
+                                            <span className="text-gray-600 font-medium">Pincode: </span>
+                                            <span className="text-gray-800 font-semibold">{details.pincode}</span>
+                                          </div>
+                                        )}
+                                        {details.country !== 'N/A' && (
+                                          <div>
+                                            <span className="text-gray-600 font-medium">Country: </span>
+                                            <span className="text-gray-800">{details.country}</span>
+                                          </div>
+                                        )}
+                                      </>
+                                    );
+                                  }
+                                  
+                                  return null;
+                                })()}
+                                
+                                {/* Always show full formatted address */}
+                                {(() => {
+                                  const addressParts = [];
+                                  if (details.houseNumber !== 'N/A' && details.road !== 'N/A') {
+                                    addressParts.push(`${details.houseNumber} ${details.road}`);
+                                  } else if (details.road !== 'N/A') {
+                                    addressParts.push(details.road);
+                                  }
+                                  if (details.area !== 'N/A') addressParts.push(details.area);
+                                  if (details.city !== 'N/A') addressParts.push(details.city);
+                                  if (details.state !== 'N/A') addressParts.push(details.state);
+                                  if (details.pincode !== 'N/A') addressParts.push(details.pincode);
+                                  if (details.country !== 'N/A') addressParts.push(details.country);
+                                  
+                                  // Check if formattedAddress is coordinates
+                                  const isFormattedCoordinates = details.formattedAddress && /^-?\d+\.?\d*,\s*-?\d+\.?\d*$/.test(details.formattedAddress.trim());
+                                  const isFullAddressCoordinates = details.fullAddress && /^-?\d+\.?\d*,\s*-?\d+\.?\d*$/.test(details.fullAddress.trim());
+                                  
+                                  const formattedFullAddress = addressParts.length > 0 
+                                    ? addressParts.join(', ')
+                                    : (details.formattedAddress && !isFormattedCoordinates)
+                                      ? details.formattedAddress
+                                      : (details.fullAddress && !isFullAddressCoordinates)
+                                        ? details.fullAddress
+                                        : null;
+                                  
+                                  // Always show full address section if we have any address data
+                                  if (formattedFullAddress) {
+                                    return (
+                                      <div className="mt-3 pt-2 border-t border-gray-300">
+                                        <p className="text-gray-600 font-medium mb-1">Full Address:</p>
+                                        <p className="text-gray-800 break-words font-semibold">{formattedFullAddress}</p>
+                                      </div>
+                                    );
+                                  }
+                                  
+                                  // If no formatted address, show stored address if available
+                                  const storedAddress = selectedEmployee.location?.address;
+                                  const isStoredCoordinates = storedAddress && /^-?\d+\.?\d*,\s*-?\d+\.?\d*$/.test(storedAddress.trim());
+                                  
+                                  if (storedAddress && !isStoredCoordinates) {
+                                    return (
+                                      <div className="mt-3 pt-2 border-t border-gray-300">
+                                        <p className="text-gray-600 font-medium mb-1">Full Address:</p>
+                                        <p className="text-gray-800 break-words font-semibold">{storedAddress}</p>
+                                      </div>
+                                    );
+                                  }
+                                  
+                                  return null;
+                                })()}
                               </div>
                             ) : (
                               <div className="space-y-2 text-xs">
-                                <p className="text-gray-800 break-words">
-                                  {selectedEmployee.location?.address || selectedEmployee.workLocationType || 'Location not available'}
-                                </p>
-                                <div className="mt-2 pt-2 border-t border-gray-300">
-                                  <p className="text-gray-600">Coordinates:</p>
-                                  <p className="text-gray-800 font-mono">
-                                    {selectedEmployee.location.latitude.toFixed(6)}, {selectedEmployee.location.longitude.toFixed(6)}
-                                  </p>
-                                </div>
+                                {(() => {
+                                  // Check if stored address is coordinates
+                                  const storedAddress = selectedEmployee.location?.address;
+                                  const isCoordinates = storedAddress && /^-?\d+\.?\d*,\s*-?\d+\.?\d*$/.test(storedAddress.trim());
+                                  
+                                  if (isCoordinates) {
+                                    return (
+                                      <div>
+                                        <p className="text-gray-500 italic mb-2">
+                                          Fetching detailed address...
+                                        </p>
+                                        <div className="mt-2 pt-2 border-t border-gray-200">
+                                          <p className="text-gray-500 text-xs">Coordinates (for reference only):</p>
+                                          <p className="text-gray-600 font-mono text-xs">
+                                            {selectedEmployee.location.latitude.toFixed(6)}, {selectedEmployee.location.longitude.toFixed(6)}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    );
+                                  } else if (storedAddress) {
+                                    return (
+                                      <div>
+                                        <p className="text-gray-800 break-words font-medium mb-2">
+                                          {storedAddress}
+                                        </p>
+                                        <div className="mt-2 pt-2 border-t border-gray-200">
+                                          <p className="text-gray-500 text-xs">Coordinates (for reference only):</p>
+                                          <p className="text-gray-600 font-mono text-xs">
+                                            {selectedEmployee.location.latitude.toFixed(6)}, {selectedEmployee.location.longitude.toFixed(6)}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    );
+                                  } else {
+                                    return (
+                                      <div>
+                                        <p className="text-gray-500 italic mb-2">
+                                          Loading detailed address...
+                                        </p>
+                                        <div className="mt-2 pt-2 border-t border-gray-200">
+                                          <p className="text-gray-500 text-xs">Coordinates (for reference only):</p>
+                                          <p className="text-gray-600 font-mono text-xs">
+                                            {selectedEmployee.location.latitude.toFixed(6)}, {selectedEmployee.location.longitude.toFixed(6)}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                })()}
                               </div>
                             )}
                           </div>
@@ -1064,6 +1264,16 @@ const LiveAttendanceMap = ({ attendance }) => {
                           </p>
                         </div>
                       </div>
+                    </div>
+                  )}
+                  
+                  {/* Always show coordinates as secondary info (not primary) */}
+                  {selectedEmployee.location?.latitude && selectedEmployee.location?.longitude && (
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                      <p className="text-xs text-gray-500">Coordinates (for reference):</p>
+                      <p className="text-xs text-gray-600 font-mono">
+                        {selectedEmployee.location.latitude.toFixed(6)}, {selectedEmployee.location.longitude.toFixed(6)}
+                      </p>
                     </div>
                   )}
                   
