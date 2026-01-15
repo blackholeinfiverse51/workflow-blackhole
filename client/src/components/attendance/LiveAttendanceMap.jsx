@@ -240,11 +240,17 @@ const LiveAttendanceMap = ({ attendance }) => {
   useEffect(() => {
     const fetchDiscrepancies = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-        const response = await fetch(`${apiUrl}/api/attendance/location-discrepancies?status=pending&limit=20`, {
+        const token = localStorage.getItem('WorkflowToken') || localStorage.getItem('token');
+        const API_URL = import.meta.env.VITE_API_URL || 
+          (typeof window !== 'undefined' && window.location.origin.includes('vercel.app')
+            ? 'https://blackholeworkflow.onrender.com/api'
+            : typeof window !== 'undefined' 
+              ? `${window.location.origin}/api`
+              : 'http://localhost:5000/api');
+        
+        const response = await fetch(`${API_URL}/attendance/location-discrepancies?status=pending&limit=20`, {
           headers: {
-            'Authorization': `Bearer ${token}`,
+            'x-auth-token': token,
             'Content-Type': 'application/json'
           }
         });
