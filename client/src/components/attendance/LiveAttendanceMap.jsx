@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { 
   MapPin, 
   Users, 
@@ -12,16 +15,191 @@ import {
   Monitor,
   AlertTriangle,
   CheckCircle,
-  XCircle
+  XCircle,
+  AlertCircle,
+  Search,
+  X
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { Input } from '../ui/input';
+// Fix for default markers in react-leaflet
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Custom office marker icon
+const officeIcon = L.divIcon({
+  className: 'custom-office-marker',
+  html: `<div style="
+    width: 32px;
+    height: 32px;
+    background-color: #ef4444;
+    border: 3px solid white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  ">
+    <svg width="16" height="16" fill="white" viewBox="0 0 24 24">
+      <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+    </svg>
+  </div>`,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+});
+
+// Custom employee marker icon
+const createEmployeeIcon = (status, isWithinRadius, isWFH = false) => {
+  let color = status === 'Present' ? '#22c55e' : status === 'Late' ? '#eab308' : '#ef4444';
+  // WFH employees get a purple/blue color to distinguish them
+  if (isWFH) {
+    color = '#8b5cf6'; // Purple color for WFH
+  }
+  
+  return L.divIcon({
+    className: 'custom-employee-marker',
+    html: `<div style="
+      width: 28px;
+      height: 28px;
+      background-color: ${color};
+      border: 2px solid white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      position: relative;
+    ">
+      ${isWFH ? '<div style="position: absolute; top: -2px; right: -2px; width: 10px; height: 10px; background-color: #8b5cf6; border: 2px solid white; border-radius: 50%;"></div>' : ''}
+      ${!isWFH && isWithinRadius ? '<div style="position: absolute; top: -2px; right: -2px; width: 10px; height: 10px; background-color: #22c55e; border: 2px solid white; border-radius: 50%;"></div>' : ''}
+    </div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+};
+
+// Component to center map on office location
+function MapCenter({ center, zoom }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [map, center, zoom]);
+  return null;
+}
+
+// Component to handle map centering from parent
+function MapController({ onMapReady, targetLocation }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (onMapReady) {
+      onMapReady(map);
+    }
+  }, [map, onMapReady]);
+  
+  useEffect(() => {
+    if (targetLocation && map) {
+      map.setView([targetLocation.lat, targetLocation.lng], 15, {
+        animate: true,
+        duration: 0.5
+      });
+    }
+  }, [map, targetLocation]);
+  
+  return null;
+}
+
+// Function to get detailed address from coordinates (reverse geocoding)
+const getDetailedAddress = async (lat, lng) => {
+  try {
+    // Using OpenStreetMap Nominatim API (free, no API key required)
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      {
+        headers: {
+          'User-Agent': 'Infiverse Attendance System'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch address');
+    }
+    
+    const data = await response.json();
+    const address = data.address || {};
+    
+    return {
+      fullAddress: data.display_name || 'Address not available',
+      pincode: address.postcode || address.pincode || 'N/A',
+      area: address.suburb || address.neighbourhood || address.locality || address.city_district || 'N/A',
+      city: address.city || address.town || address.village || address.county || 'N/A',
+      state: address.state || 'N/A',
+      country: address.country || 'N/A',
+      road: address.road || address.street || 'N/A',
+      houseNumber: address.house_number || 'N/A',
+      formattedAddress: [
+        address.house_number,
+        address.road,
+        address.suburb || address.neighbourhood,
+        address.city || address.town,
+        address.state,
+        address.postcode,
+        address.country
+      ].filter(Boolean).join(', ')
+    };
+  } catch (error) {
+    console.warn('Reverse geocoding failed:', error);
+    // Fallback to bigdatacloud API
+    try {
+      const fallbackResponse = await fetch(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
+      );
+      const fallbackData = await fallbackResponse.json();
+      return {
+        fullAddress: fallbackData.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        pincode: fallbackData.postcode || 'N/A',
+        area: fallbackData.locality || fallbackData.city || 'N/A',
+        city: fallbackData.city || fallbackData.locality || 'N/A',
+        state: fallbackData.principalSubdivision || 'N/A',
+        country: fallbackData.countryName || 'N/A',
+        road: 'N/A',
+        houseNumber: 'N/A',
+        formattedAddress: fallbackData.display_name || 'Address not available'
+      };
+    } catch (fallbackError) {
+      return {
+        fullAddress: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        pincode: 'N/A',
+        area: 'N/A',
+        city: 'N/A',
+        state: 'N/A',
+        country: 'N/A',
+        road: 'N/A',
+        houseNumber: 'N/A',
+        formattedAddress: 'Address not available'
+      };
+    }
+  }
+};
 
 const LiveAttendanceMap = ({ attendance }) => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [mapCenter, setMapCenter] = useState({ lat: 19.1663, lng: 72.8526 }); // Mumbai office
+  const [locationDiscrepancies, setLocationDiscrepancies] = useState([]);
+  const [showDiscrepancies, setShowDiscrepancies] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [highlightedEmployee, setHighlightedEmployee] = useState(null);
+  const [targetLocation, setTargetLocation] = useState(null);
+  const [addressDetails, setAddressDetails] = useState({});
+  const [loadingAddress, setLoadingAddress] = useState({});
+  const mapInstanceRef = useRef(null);
 
   // Office location
   const officeLocation = {
@@ -30,10 +208,89 @@ const LiveAttendanceMap = ({ attendance }) => {
     address: "Blackhole Infiverse, Kali Gali, 176/1410, Rd Number 3, near Hathi Circle, above Bright Connection, Motilal Nagar II, Goregaon West, Mumbai, Maharashtra 400104"
   };
 
+  const OFFICE_RADIUS = 2000; // 2km radius
+
   // Filter employees with location data
   const employeesWithLocation = attendance?.filter(emp => 
     emp.location && emp.location.latitude && emp.location.longitude
   ) || [];
+
+  // Filter employees based on search query
+  const filteredEmployees = employeesWithLocation.filter(emp => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    const employeeName = (emp.name || emp.user?.name || '').toLowerCase();
+    return (
+      employeeName.includes(query) ||
+      emp.email?.toLowerCase().includes(query) ||
+      emp.employeeId?.toLowerCase().includes(query) ||
+      emp.location?.address?.toLowerCase().includes(query)
+    );
+  });
+
+  // Fetch location discrepancies
+  useEffect(() => {
+    const fetchDiscrepancies = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+        const response = await fetch(`${apiUrl}/api/attendance/location-discrepancies?status=pending&limit=20`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setLocationDiscrepancies(data.discrepancies || []);
+        }
+      } catch (error) {
+        console.error('Error fetching location discrepancies:', error);
+      }
+    };
+
+    // Only fetch if user is admin (you can add role check here)
+    fetchDiscrepancies();
+  }, []);
+
+  // Fetch detailed addresses for all employees with locations
+  useEffect(() => {
+    const fetchAddresses = async () => {
+      const employeesToFetch = employeesWithLocation.filter(emp => 
+        emp.location?.latitude && 
+        emp.location?.longitude && 
+        !addressDetails[`${emp.location.latitude}_${emp.location.longitude}`] &&
+        !loadingAddress[`${emp.location.latitude}_${emp.location.longitude}`]
+      );
+      
+      // Process in batches to respect API rate limits
+      for (const employee of employeesToFetch.slice(0, 10)) {
+        const key = `${employee.location.latitude}_${employee.location.longitude}`;
+        setLoadingAddress(prev => ({ ...prev, [key]: true }));
+        
+        try {
+          const details = await getDetailedAddress(
+            employee.location.latitude,
+            employee.location.longitude
+          );
+          setAddressDetails(prev => ({ ...prev, [key]: details }));
+        } catch (error) {
+          console.error('Error fetching address details:', error);
+        } finally {
+          setLoadingAddress(prev => ({ ...prev, [key]: false }));
+        }
+        
+        // Add delay to respect API rate limits (1 request per second for Nominatim)
+        await new Promise(resolve => setTimeout(resolve, 1100));
+      }
+    };
+    
+    if (employeesWithLocation.length > 0) {
+      fetchAddresses();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeesWithLocation.length]); // Only run when employee list changes
 
   // Calculate distance from office
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -91,13 +348,27 @@ const LiveAttendanceMap = ({ attendance }) => {
       {/* Map Header */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="w-5 h-5" />
-            Live Location Map
-          </CardTitle>
-          <CardDescription>
-            Real-time employee locations and office proximity
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="w-5 h-5" />
+                Live Location Map
+              </CardTitle>
+              <CardDescription>
+                Real-time employee locations and office proximity
+              </CardDescription>
+            </div>
+            {locationDiscrepancies.length > 0 && (
+              <Button
+                variant={showDiscrepancies ? "default" : "outline"}
+                onClick={() => setShowDiscrepancies(!showDiscrepancies)}
+                className="flex items-center gap-2"
+              >
+                <AlertCircle className="w-4 h-4" />
+                Location Alerts ({locationDiscrepancies.length})
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4 text-sm text-gray-600">
@@ -113,91 +384,302 @@ const LiveAttendanceMap = ({ attendance }) => {
         </CardContent>
       </Card>
 
-      {/* Map Visualization */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Map Area */}
-        <div className="lg:col-span-2">
-          <Card className="h-96">
-            <CardContent className="p-0 h-full">
-              <div className="relative h-full bg-gradient-to-br from-blue-50 to-indigo-100 rounded-lg overflow-hidden">
-                {/* Office Marker */}
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                  <motion.div
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                    className="relative"
-                  >
-                    <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center shadow-lg">
-                      <Building className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-white px-2 py-1 rounded shadow text-xs font-medium whitespace-nowrap">
-                      Office
-                    </div>
-                  </motion.div>
-                </div>
-
-                {/* Employee Markers */}
-                {employeesWithLocation.map((employee, index) => {
-                  const distance = calculateDistance(
-                    officeLocation.lat,
-                    officeLocation.lng,
-                    employee.location.latitude,
-                    employee.location.longitude
-                  );
-                  
-                  // Position relative to office (simplified visualization)
-                  const offsetX = (Math.random() - 0.5) * 200;
-                  const offsetY = (Math.random() - 0.5) * 200;
-                  
-                  return (
-                    <motion.div
-                      key={employee._id}
-                      initial={{ opacity: 0, scale: 0 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="absolute"
-                      style={{
-                        top: `calc(50% + ${offsetY}px)`,
-                        left: `calc(50% + ${offsetX}px)`,
-                        transform: 'translate(-50%, -50%)'
-                      }}
-                      onClick={() => setSelectedEmployee(employee)}
-                    >
-                      <div className="relative cursor-pointer">
-                        <div className={`w-6 h-6 ${getStatusColor(employee.status)} rounded-full flex items-center justify-center shadow-lg border-2 border-white`}>
-                          <div className="w-2 h-2 bg-white rounded-full" />
-                        </div>
-                        {distance <= 100 && (
-                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border border-white" />
-                        )}
+      {/* Location Discrepancy Alerts */}
+      {showDiscrepancies && locationDiscrepancies.length > 0 && (
+        <Card className="border-orange-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-orange-600">
+              <AlertTriangle className="w-5 h-5" />
+              Location Discrepancy Alerts
+            </CardTitle>
+            <CardDescription>
+              Employees with significant distance between start and end day locations
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 max-h-64 overflow-y-auto">
+              {locationDiscrepancies.map((disc) => (
+                <div
+                  key={disc._id}
+                  className="p-3 border rounded-lg bg-orange-50 border-orange-200"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">{disc.user?.name}</span>
+                        <Badge variant="outline" className={`text-xs ${
+                          disc.severity === 'critical' ? 'bg-red-100 text-red-700' :
+                          disc.severity === 'high' ? 'bg-orange-100 text-orange-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {disc.severity}
+                        </Badge>
                       </div>
-                    </motion.div>
-                  );
-                })}
-
-                {/* Legend */}
-                <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg">
-                  <h4 className="text-sm font-medium mb-2">Legend</h4>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-red-500 rounded-full" />
-                      <span>Office Location</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-green-500 rounded-full" />
-                      <span>Present</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-yellow-500 rounded-full" />
-                      <span>Late</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-400 rounded-full" />
-                      <span>Within office radius</span>
+                      <div className="text-sm text-gray-600">
+                        <p>Distance: <span className="font-semibold">{disc.distanceKm.toFixed(2)} km</span></p>
+                        <p className="text-xs mt-1">
+                          Start: {disc.startLocation?.address || 'Unknown'} → 
+                          End: {disc.endLocation?.address || 'Unknown'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {new Date(disc.date).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Map Visualization */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Interactive Map */}
+        <div className="lg:col-span-2">
+          <Card className="h-[600px]">
+            <CardContent className="p-0 h-full">
+              {typeof window !== 'undefined' && (
+                <MapContainer
+                  center={[officeLocation.lat, officeLocation.lng]}
+                  zoom={13}
+                  style={{ height: '100%', width: '100%', zIndex: 0 }}
+                >
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+                  
+                  {/* Map Controller for centering */}
+                  <MapController 
+                    onMapReady={(map) => { mapInstanceRef.current = map; }}
+                    targetLocation={targetLocation} 
+                  />
+                  
+                  {/* Office Location Marker */}
+                  <Marker
+                    position={[officeLocation.lat, officeLocation.lng]}
+                    icon={officeIcon}
+                  >
+                    <Popup>
+                      <div className="text-center">
+                        <Building className="w-5 h-5 mx-auto mb-1 text-red-500" />
+                        <strong>Office Location</strong>
+                        <p className="text-xs mt-1">{officeLocation.address}</p>
+                      </div>
+                    </Popup>
+                  </Marker>
+
+                  {/* Office Radius Circle */}
+                  <Circle
+                    center={[officeLocation.lat, officeLocation.lng]}
+                    radius={OFFICE_RADIUS}
+                    pathOptions={{
+                      color: '#3b82f6',
+                      fillColor: '#3b82f6',
+                      fillOpacity: 0.1,
+                      weight: 2
+                    }}
+                  />
+
+                  {/* Employee Markers */}
+                  {filteredEmployees.map((employee) => {
+                    const distance = calculateDistance(
+                      officeLocation.lat,
+                      officeLocation.lng,
+                      employee.location.latitude,
+                      employee.location.longitude
+                    );
+                    const isWithinRadius = distance <= OFFICE_RADIUS;
+                    const isWFH = employee.workLocationType === 'Home' || 
+                                  employee.workPattern === 'Remote' || 
+                                  employee.location?.address?.toLowerCase().includes('work from home') ||
+                                  employee.location?.address?.toLowerCase().includes('wfh');
+                    
+                    return (
+                      <Marker
+                        key={employee.userId || employee._id}
+                        position={[employee.location.latitude, employee.location.longitude]}
+                        icon={createEmployeeIcon(employee.status, isWithinRadius, isWFH)}
+                        eventHandlers={{
+                          click: () => {
+                            setSelectedEmployee(employee);
+                            setHighlightedEmployee(employee);
+                            // Center map on employee location
+                            setTargetLocation({
+                              lat: employee.location.latitude,
+                              lng: employee.location.longitude
+                            });
+                          }
+                        }}
+                      >
+                        <Popup>
+                          <div className="min-w-[250px]">
+                            <div className="flex items-center gap-3 mb-3">
+                              <Avatar className="w-12 h-12 border-2 border-gray-200">
+                                <AvatarImage src={employee.avatar} />
+                                <AvatarFallback className="text-sm font-semibold">
+                                  {employee.name?.split(' ').map(n => n[0]).join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1">
+                                <p className="font-semibold text-sm text-gray-900">
+                                  {employee.name || employee.user?.name || 'Unknown Employee'}
+                                </p>
+                                {employee.employeeId && (
+                                  <p className="text-xs text-gray-500 font-mono">{employee.employeeId}</p>
+                                )}
+                                <Badge className={`mt-1 text-xs ${getStatusColor(employee.status)}`}>
+                                  {getStatusIcon(employee.status)}
+                                  <span className="ml-1">{employee.status}</span>
+                                </Badge>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2 text-xs">
+                              {/* Location */}
+                              {employee.location?.latitude && employee.location?.longitude && (() => {
+                                const key = `${employee.location.latitude}_${employee.location.longitude}`;
+                                const details = addressDetails[key];
+                                const isWFH = employee.workLocationType === 'Home' || 
+                                              employee.workPattern === 'Remote' || 
+                                              employee.location?.address?.toLowerCase().includes('work from home') ||
+                                              employee.location?.address?.toLowerCase().includes('wfh');
+                                
+                                return (
+                                  <div className={`rounded-md p-2 ${isWFH ? 'bg-purple-50 border border-purple-200' : 'bg-gray-50'}`}>
+                                    <div className="flex items-start gap-2">
+                                      <MapPin className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isWFH ? 'text-purple-600' : 'text-gray-500'}`} />
+                                      <div className="flex-1">
+                                        {isWFH && (
+                                          <div className="mb-2">
+                                            <Badge className="bg-purple-100 text-purple-700 text-xs mb-1">
+                                              🏠 Work From Home
+                                            </Badge>
+                                          </div>
+                                        )}
+                                        {details ? (
+                                          <>
+                                            {details.road !== 'N/A' && details.houseNumber !== 'N/A' && (
+                                              <p className="text-gray-800 font-semibold mb-1">
+                                                {details.houseNumber} {details.road}
+                                              </p>
+                                            )}
+                                            {details.area !== 'N/A' && (
+                                              <p className="text-gray-700 font-semibold mb-1">
+                                                {details.area}
+                                                {details.pincode !== 'N/A' && ` - ${details.pincode}`}
+                                              </p>
+                                            )}
+                                            {details.city !== 'N/A' && details.city !== details.area && (
+                                              <p className="text-gray-600 text-xs mb-1">{details.city}, {details.state !== 'N/A' ? details.state : ''}</p>
+                                            )}
+                                            {details.pincode !== 'N/A' && (
+                                              <p className="text-gray-600 text-xs mb-2">
+                                                Pincode: <span className="font-semibold">{details.pincode}</span>
+                                              </p>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <p className="text-gray-700 font-medium mb-1 break-words">
+                                            {employee.location?.address || 'Location not available'}
+                                          </p>
+                                        )}
+                                        {!isWFH && (
+                                          <div className="flex items-center gap-2">
+                                            <Navigation className={`w-3 h-3 ${isWithinRadius ? 'text-green-600' : 'text-orange-600'}`} />
+                                            <span className={`font-semibold ${isWithinRadius ? 'text-green-600' : 'text-orange-600'}`}>
+                                              {distance <= 1000 
+                                                ? `${distance.toFixed(0)}m` 
+                                                : `${(distance / 1000).toFixed(2)}km`} from office
+                                              {isWithinRadius && <span className="ml-1">✓</span>}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {isWFH && (
+                                          <div className="flex items-center gap-2 mt-2">
+                                            <Navigation className="w-3 h-3 text-purple-600" />
+                                            <span className="font-semibold text-purple-600">
+                                              {distance <= 1000 
+                                                ? `${distance.toFixed(0)}m` 
+                                                : `${(distance / 1000).toFixed(2)}km`} from office (WFH)
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                              
+                              {/* Fallback for employees without coordinates */}
+                              {(!employee.location?.latitude || !employee.location?.longitude) && (
+                                <div className="bg-gray-50 rounded-md p-2">
+                                  <div className="flex items-start gap-2">
+                                    <MapPin className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                                    <div className="flex-1">
+                                      <p className="text-gray-700 font-medium mb-1">
+                                        {employee.location?.address || 'Location not available'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Time Info */}
+                              <div className="flex items-center justify-between pt-2 border-t">
+                                <div className="flex items-center gap-2">
+                                  {employee.source === 'StartDay' ? (
+                                    <Smartphone className="w-3 h-3 text-blue-500" />
+                                  ) : employee.source === 'Biometric' ? (
+                                    <Monitor className="w-3 h-3 text-green-500" />
+                                  ) : (
+                                    <Building className="w-3 h-3 text-gray-500" />
+                                  )}
+                                  <span className="text-gray-600">Check In:</span>
+                                </div>
+                                <span className="font-medium">{formatTime(employee.startTime)}</span>
+                              </div>
+                              
+                              {employee.hoursWorked > 0 && (
+                                <div className="flex items-center justify-between pt-2 border-t">
+                                  <span className="text-gray-600">Hours Worked:</span>
+                                  <span className="font-semibold text-gray-900">{employee.hoursWorked.toFixed(1)}h</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full mt-3 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedEmployee(employee);
+                                setHighlightedEmployee(employee);
+                                // Center map on employee location
+                                if (employee.location) {
+                                  setTargetLocation({
+                                    lat: employee.location.latitude,
+                                    lng: employee.location.longitude
+                                  });
+                                }
+                                // Close the popup
+                                if (mapInstanceRef.current) {
+                                  mapInstanceRef.current.closePopup();
+                                }
+                              }}
+                            >
+                              View Full Details
+                            </Button>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    );
+                  })}
+                </MapContainer>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -206,89 +688,233 @@ const LiveAttendanceMap = ({ attendance }) => {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Employee Locations</CardTitle>
+              <CardTitle className="text-lg flex items-center justify-between">
+                <span>Employee Locations</span>
+                <Badge variant="outline" className="text-xs">
+                  {filteredEmployees.length} / {employeesWithLocation.length}
+                </Badge>
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 max-h-80 overflow-y-auto">
-              {employeesWithLocation.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>No location data available</p>
-                </div>
-              ) : (
-                employeesWithLocation.map((employee) => {
-                  const distance = calculateDistance(
-                    officeLocation.lat,
-                    officeLocation.lng,
-                    employee.location.latitude,
-                    employee.location.longitude
-                  );
-                  
-                  return (
-                    <motion.div
-                      key={employee._id}
-                      whileHover={{ scale: 1.02 }}
-                      className={`p-3 border rounded-lg cursor-pointer transition-all ${
-                        selectedEmployee?._id === employee._id 
-                          ? 'border-blue-500 bg-blue-50' 
-                          : 'hover:border-gray-300'
-                      }`}
-                      onClick={() => setSelectedEmployee(employee)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar className="w-8 h-8">
-                          <AvatarImage src={employee.user?.avatar} />
-                          <AvatarFallback className="text-xs">
-                            {employee.user?.name?.split(' ').map(n => n[0]).join('')}
-                          </AvatarFallback>
-                        </Avatar>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-sm truncate">
-                              {employee.user?.name}
-                            </p>
-                            <Badge 
-                              variant="outline" 
-                              className={`text-xs ${getStatusColor(employee.status).replace('bg-', 'text-').replace('-500', '-600')}`}
-                            >
-                              {getStatusIcon(employee.status)}
-                              <span className="ml-1">{employee.status}</span>
-                            </Badge>
-                          </div>
+            <CardContent className="space-y-3">
+              {/* Search Bar */}
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Search by name, email, ID, or location..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-10"
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7"
+                    onClick={() => setSearchQuery('')}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+
+              <div className="max-h-96 overflow-y-auto space-y-3">
+                {filteredEmployees.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>{searchQuery ? 'No employees found' : 'No location data available'}</p>
+                    {searchQuery && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => setSearchQuery('')}
+                      >
+                        Clear search
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  filteredEmployees.map((employee) => {
+                    const distance = calculateDistance(
+                      officeLocation.lat,
+                      officeLocation.lng,
+                      employee.location.latitude,
+                      employee.location.longitude
+                    );
+                    const isWithinRadius = distance <= OFFICE_RADIUS;
+                    const isSelected = selectedEmployee?.userId === employee.userId || selectedEmployee?._id === employee._id;
+                    const isHighlighted = highlightedEmployee?.userId === employee.userId || highlightedEmployee?._id === employee._id;
+                    
+                    return (
+                      <motion.div
+                        key={employee.userId || employee._id}
+                        whileHover={{ scale: 1.02 }}
+                        className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                          isSelected
+                            ? 'border-blue-500 bg-blue-50 shadow-md' 
+                            : isHighlighted
+                            ? 'border-green-500 bg-green-50 shadow-sm'
+                            : 'border-gray-200 hover:border-gray-400 hover:shadow-sm'
+                        }`}
+                        onClick={() => {
+                          setSelectedEmployee(employee);
+                          setHighlightedEmployee(employee);
+                          // Center map on employee location
+                          if (employee.location) {
+                            setTargetLocation({
+                              lat: employee.location.latitude,
+                              lng: employee.location.longitude
+                            });
+                          }
+                        }}
+                      >
+                        <div className="flex items-start gap-3">
+                            <Avatar className="w-10 h-10 border-2 border-white shadow-sm flex-shrink-0">
+                            <AvatarImage src={employee.avatar} />
+                            <AvatarFallback className="text-xs font-semibold">
+                              {(employee.name || employee.user?.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
                           
-                          <div className="flex items-center gap-2 mt-1">
-                            <Navigation className="w-3 h-3 text-gray-400" />
-                            <span className="text-xs text-gray-600">
-                              {distance <= 100 ? (
-                                <span className="text-green-600 font-medium">
-                                  In office ({distance.toFixed(0)}m)
-                                </span>
-                              ) : (
-                                <span className="text-orange-600">
-                                  {(distance / 1000).toFixed(1)}km away
-                                </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                              <p className="font-semibold text-sm text-gray-900 break-words">
+                                {employee.name || employee.user?.name || 'Unknown Employee'}
+                              </p>
+                              <Badge 
+                                variant="outline" 
+                                className={`text-xs flex-shrink-0 ${getStatusColor(employee.status).replace('bg-', 'text-').replace('-500', '-600')}`}
+                              >
+                                {getStatusIcon(employee.status)}
+                                <span className="ml-1">{employee.status}</span>
+                              </Badge>
+                              {(employee.workLocationType === 'Home' || 
+                                employee.workPattern === 'Remote' || 
+                                employee.location?.address?.toLowerCase().includes('work from home') ||
+                                employee.location?.address?.toLowerCase().includes('wfh')) && (
+                                <Badge className="bg-purple-100 text-purple-700 text-xs flex-shrink-0">
+                                  🏠 WFH
+                                </Badge>
                               )}
-                            </span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 mt-1">
-                            {employee.source === 'StartDay' ? (
-                              <Smartphone className="w-3 h-3 text-blue-500" />
-                            ) : employee.source === 'Biometric' ? (
-                              <Monitor className="w-3 h-3 text-green-500" />
-                            ) : (
-                              <Building className="w-3 h-3 text-gray-500" />
+                            </div>
+                            
+                            {employee.employeeId && (
+                              <div className="flex items-center gap-1 mb-2">
+                                <span className="text-xs text-gray-500">ID:</span>
+                                <span className="text-xs font-mono text-gray-700">{employee.employeeId}</span>
+                              </div>
                             )}
-                            <span className="text-xs text-gray-500">
-                              {formatTime(employee.startDayTime)}
-                            </span>
+                            
+                            {/* Location and Distance */}
+                            {employee.location?.latitude && employee.location?.longitude && (() => {
+                              const key = `${employee.location.latitude}_${employee.location.longitude}`;
+                              const details = addressDetails[key];
+                              const isWFH = employee.workLocationType === 'Home' || 
+                                            employee.workPattern === 'Remote' || 
+                                            employee.location?.address?.toLowerCase().includes('work from home') ||
+                                            employee.location?.address?.toLowerCase().includes('wfh');
+                              
+                              return (
+                                <div className={`rounded-md p-2 mb-2 ${isWFH ? 'bg-purple-50 border border-purple-200' : 'bg-gray-50'}`}>
+                                  <div className="flex items-start gap-2">
+                                    <MapPin className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isWFH ? 'text-purple-600' : 'text-gray-500'}`} />
+                                    <div className="flex-1 min-w-0">
+                                      {isWFH && (
+                                        <div className="mb-2">
+                                          <Badge className="bg-purple-100 text-purple-700 text-xs">
+                                            🏠 Work From Home
+                                          </Badge>
+                                        </div>
+                                      )}
+                                      {details ? (
+                                        <>
+                                          {details.road !== 'N/A' && details.houseNumber !== 'N/A' && (
+                                            <p className="text-xs text-gray-800 font-semibold mb-1">
+                                              {details.houseNumber} {details.road}
+                                            </p>
+                                          )}
+                                          {details.area !== 'N/A' && (
+                                            <p className="text-xs text-gray-700 font-semibold mb-1">
+                                              {details.area}
+                                              {details.pincode !== 'N/A' && ` - ${details.pincode}`}
+                                            </p>
+                                          )}
+                                          {details.city !== 'N/A' && details.city !== details.area && (
+                                            <p className="text-xs text-gray-600 mb-1">{details.city}, {details.state !== 'N/A' ? details.state : ''}</p>
+                                          )}
+                                          {details.pincode !== 'N/A' && !details.area.includes(details.pincode) && (
+                                            <p className="text-xs text-gray-600 mb-2">
+                                              Pincode: <span className="font-semibold">{details.pincode}</span>
+                                            </p>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <p className="text-xs text-gray-800 font-medium mb-2 break-words">
+                                          {employee.location?.address || employee.workLocationType || 'Location not available'}
+                                        </p>
+                                      )}
+                                      <div className="flex items-center gap-2">
+                                        <Navigation className={`w-3 h-3 ${isWFH ? 'text-purple-600' : (isWithinRadius ? 'text-green-600' : 'text-orange-600')}`} />
+                                        <span className={`text-xs font-semibold ${isWFH ? 'text-purple-600' : (isWithinRadius ? 'text-green-600' : 'text-orange-600')}`}>
+                                          {distance <= 1000 
+                                            ? `${distance.toFixed(0)}m` 
+                                            : `${(distance / 1000).toFixed(2)}km`} from office
+                                          {isWFH && ' (WFH)'}
+                                          {!isWFH && isWithinRadius && (
+                                            <span className="ml-1 text-green-500">✓</span>
+                                          )}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                            
+                            {/* Fallback for employees without coordinates */}
+                            {(!employee.location?.latitude || !employee.location?.longitude) && (
+                              <div className="bg-gray-50 rounded-md p-2 mb-2">
+                                <div className="flex items-start gap-2">
+                                  <MapPin className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs text-gray-600 mb-1 font-medium">Address:</p>
+                                    <p className="text-xs text-gray-800 font-medium mb-2 break-words">
+                                      {employee.location?.address || employee.workLocationType || 'Location not available'}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Check-in Time */}
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                              {employee.source === 'StartDay' ? (
+                                <Smartphone className="w-3 h-3 text-blue-500" />
+                              ) : employee.source === 'Biometric' ? (
+                                <Monitor className="w-3 h-3 text-green-500" />
+                              ) : (
+                                <Building className="w-3 h-3 text-gray-500" />
+                              )}
+                              <Clock className="w-3 h-3 text-gray-400" />
+                              <span>Checked in: {formatTime(employee.startTime)}</span>
+                            </div>
+                            
+                            {employee.hoursWorked > 0 && (
+                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-600">Hours worked:</span>
+                                  <span className="font-semibold text-gray-900">{employee.hoursWorked.toFixed(1)}h</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  );
-                })
-              )}
+                      </motion.div>
+                    );
+                  })
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -301,48 +927,178 @@ const LiveAttendanceMap = ({ attendance }) => {
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-3">
                   <Avatar className="w-12 h-12">
-                    <AvatarImage src={selectedEmployee.user?.avatar} />
+                    <AvatarImage src={selectedEmployee.avatar} />
                     <AvatarFallback>
-                      {selectedEmployee.user?.name?.split(' ').map(n => n[0]).join('')}
+                      {(selectedEmployee.name || selectedEmployee.user?.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2)}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <h4 className="font-medium">{selectedEmployee.user?.name}</h4>
-                    <p className="text-sm text-gray-600">{selectedEmployee.user?.email}</p>
+                    <h4 className="font-medium text-gray-900">
+                      {selectedEmployee.name || selectedEmployee.user?.name || 'Unknown Employee'}
+                    </h4>
+                    <p className="text-sm text-gray-600">{selectedEmployee.email}</p>
                   </div>
                 </div>
 
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between items-center">
                     <span>Status:</span>
-                    <Badge className={getStatusColor(selectedEmployee.status).replace('bg-', 'text-').replace('-500', '-600')}>
-                      {selectedEmployee.status}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge className={getStatusColor(selectedEmployee.status).replace('bg-', 'text-').replace('-500', '-600')}>
+                        {selectedEmployee.status}
+                      </Badge>
+                      {(selectedEmployee.workLocationType === 'Home' || 
+                        selectedEmployee.workPattern === 'Remote' || 
+                        selectedEmployee.location?.address?.toLowerCase().includes('work from home') ||
+                        selectedEmployee.location?.address?.toLowerCase().includes('wfh')) && (
+                        <Badge className="bg-purple-100 text-purple-700 text-xs">
+                          🏠 WFH
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="flex justify-between">
                     <span>Check In:</span>
-                    <span>{formatTime(selectedEmployee.startDayTime)}</span>
+                    <span>{formatTime(selectedEmployee.startTime)}</span>
                   </div>
                   
-                  <div className="flex justify-between">
-                    <span>Location:</span>
-                    <span className="text-right">
-                      {selectedEmployee.location?.address || 'Unknown'}
-                    </span>
-                  </div>
+                  {/* Address Section */}
+                  {selectedEmployee.location?.latitude && selectedEmployee.location?.longitude && (() => {
+                    const key = `${selectedEmployee.location.latitude}_${selectedEmployee.location.longitude}`;
+                    const details = addressDetails[key];
+                    const isLoading = loadingAddress[key];
+                    
+                    const isWFH = selectedEmployee.workLocationType === 'Home' || 
+                                  selectedEmployee.workPattern === 'Remote' || 
+                                  selectedEmployee.location?.address?.toLowerCase().includes('work from home') ||
+                                  selectedEmployee.location?.address?.toLowerCase().includes('wfh');
+                    
+                    return (
+                      <div className={`rounded-md p-3 border ${isWFH ? 'bg-purple-50 border-purple-200' : 'bg-gray-50 border-gray-200'}`}>
+                        <div className="flex items-start gap-2">
+                          <MapPin className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isWFH ? 'text-purple-600' : 'text-gray-500'}`} />
+                          <div className="flex-1">
+                            {isWFH && (
+                              <div className="mb-2">
+                                <Badge className="bg-purple-100 text-purple-700 text-xs">
+                                  🏠 Work From Home
+                                </Badge>
+                              </div>
+                            )}
+                            <p className="text-xs text-gray-600 mb-2 font-semibold">Exact Location Details:</p>
+                            
+                            {isLoading ? (
+                              <div className="text-xs text-gray-500">Loading address details...</div>
+                            ) : details ? (
+                              <div className="space-y-2 text-xs">
+                                {details.road !== 'N/A' && details.houseNumber !== 'N/A' && (
+                                  <div>
+                                    <span className="text-gray-600 font-medium">Street Address: </span>
+                                    <span className="text-gray-800">{details.houseNumber} {details.road}</span>
+                                  </div>
+                                )}
+                                {details.area !== 'N/A' && (
+                                  <div>
+                                    <span className="text-gray-600 font-medium">Area: </span>
+                                    <span className="text-gray-800">{details.area}</span>
+                                  </div>
+                                )}
+                                {details.city !== 'N/A' && (
+                                  <div>
+                                    <span className="text-gray-600 font-medium">City: </span>
+                                    <span className="text-gray-800">{details.city}</span>
+                                  </div>
+                                )}
+                                {details.pincode !== 'N/A' && (
+                                  <div>
+                                    <span className="text-gray-600 font-medium">Pincode: </span>
+                                    <span className="text-gray-800 font-semibold">{details.pincode}</span>
+                                  </div>
+                                )}
+                                {details.state !== 'N/A' && (
+                                  <div>
+                                    <span className="text-gray-600 font-medium">State: </span>
+                                    <span className="text-gray-800">{details.state}</span>
+                                  </div>
+                                )}
+                                {details.country !== 'N/A' && (
+                                  <div>
+                                    <span className="text-gray-600 font-medium">Country: </span>
+                                    <span className="text-gray-800">{details.country}</span>
+                                  </div>
+                                )}
+                                <div className="mt-3 pt-2 border-t border-gray-300">
+                                  <p className="text-gray-600 font-medium mb-1">Full Address:</p>
+                                  <p className="text-gray-800 break-words">{details.formattedAddress || details.fullAddress}</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2 text-xs">
+                                <p className="text-gray-800 break-words">
+                                  {selectedEmployee.location?.address || selectedEmployee.workLocationType || 'Location not available'}
+                                </p>
+                                <div className="mt-2 pt-2 border-t border-gray-300">
+                                  <p className="text-gray-600">Coordinates:</p>
+                                  <p className="text-gray-800 font-mono">
+                                    {selectedEmployee.location.latitude.toFixed(6)}, {selectedEmployee.location.longitude.toFixed(6)}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   
-                  <div className="flex justify-between">
-                    <span>Distance:</span>
-                    <span>
-                      {calculateDistance(
-                        officeLocation.lat,
-                        officeLocation.lng,
-                        selectedEmployee.location.latitude,
-                        selectedEmployee.location.longitude
-                      ).toFixed(0)}m from office
-                    </span>
-                  </div>
+                  {/* Fallback for employees without coordinates */}
+                  {(!selectedEmployee.location?.latitude || !selectedEmployee.location?.longitude) && (
+                    <div className="bg-gray-50 rounded-md p-3 border border-gray-200">
+                      <div className="flex items-start gap-2">
+                        <MapPin className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-xs text-gray-600 mb-1 font-medium">Location:</p>
+                          <p className="text-xs text-gray-800 break-words">
+                            {selectedEmployee.location?.address || selectedEmployee.workLocationType || 'Location not available'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedEmployee.location?.latitude && selectedEmployee.location?.longitude && (
+                    <div className="flex justify-between">
+                      <span>Distance:</span>
+                      <span className="font-semibold">
+                        {calculateDistance(
+                          officeLocation.lat,
+                          officeLocation.lng,
+                          selectedEmployee.location.latitude,
+                          selectedEmployee.location.longitude
+                        ) <= 1000 
+                          ? `${calculateDistance(
+                              officeLocation.lat,
+                              officeLocation.lng,
+                              selectedEmployee.location.latitude,
+                              selectedEmployee.location.longitude
+                            ).toFixed(0)}m`
+                          : `${(calculateDistance(
+                              officeLocation.lat,
+                              officeLocation.lng,
+                              selectedEmployee.location.latitude,
+                              selectedEmployee.location.longitude
+                            ) / 1000).toFixed(2)}km`} from office
+                      </span>
+                    </div>
+                  )}
+                  
+                  {selectedEmployee.hoursWorked > 0 && (
+                    <div className="flex justify-between pt-2 border-t">
+                      <span>Hours Worked:</span>
+                      <span className="font-semibold">{selectedEmployee.hoursWorked.toFixed(1)}h</span>
+                    </div>
+                  )}
                 </div>
 
                 <Button 
@@ -363,3 +1119,4 @@ const LiveAttendanceMap = ({ attendance }) => {
 };
 
 export default LiveAttendanceMap;
+

@@ -11,6 +11,7 @@ const UserTag = require('../models/UserTag');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
 const DailyAttendance = require('../models/DailyAttendance');
+const { reverseGeocode } = require('../utils/reverseGeocode');
 
 // SIMPLE RULE: Spam validation = EXACTLY 8 hours for cumulative calculation
 const SPAM_VALIDATION_HOURS = 8;
@@ -90,11 +91,25 @@ router.post('/start-day/:userId', auth, async (req, res) => {
     let locationValidated = false;
     
     if (workFromHome) {
-      // Work from home - lock the location
+      // Work from home - lock the location and get exact address
       workLocationType = 'Home';
       locationValidated = true;
       
-      console.log(`📍 User ${userId} starting work from home at coordinates: ${latitude}, ${longitude}`);
+      // If address is not provided or is generic, reverse geocode to get exact address
+      if (!address || address === 'Work From Home' || address.toLowerCase().includes('work from home')) {
+        try {
+          const geocodeResult = await reverseGeocode(latitude, longitude);
+          address = geocodeResult.fullAddress || geocodeResult.displayName || address;
+          console.log(`📍 User ${userId} starting work from home at: ${address} (${latitude}, ${longitude})`);
+        } catch (error) {
+          console.warn(`⚠️ Reverse geocoding failed for WFH location: ${error.message}`);
+          // Keep the provided address or use coordinates as fallback
+          address = address || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+          console.log(`📍 User ${userId} starting work from home at coordinates: ${latitude}, ${longitude}`);
+        }
+      } else {
+        console.log(`📍 User ${userId} starting work from home at: ${address} (${latitude}, ${longitude})`);
+      }
     } else {
       // Check if user is within office radius
       const distance = geolib.getDistance(
@@ -349,12 +364,33 @@ router.post('/end-day/:userId', auth, async (req, res) => {
     
     const endTime = new Date();
     
+    // Check if this is a WFH employee and get exact address if needed
+    const isWFH = attendanceRecord.workPattern === 'Remote' || 
+                   attendanceRecord.startDayLocation?.address?.toLowerCase().includes('work from home') ||
+                   attendanceRecord.startDayLocation?.address?.toLowerCase().includes('wfh');
+    
+    let endDayAddress = address;
+    
+    // If WFH and address is not provided or is generic, reverse geocode to get exact address
+    if (isWFH && (!endDayAddress || endDayAddress === 'Work From Home' || endDayAddress.toLowerCase().includes('work from home'))) {
+      if (latitude && longitude) {
+        try {
+          const geocodeResult = await reverseGeocode(latitude, longitude);
+          endDayAddress = geocodeResult.fullAddress || geocodeResult.displayName || endDayAddress;
+          console.log(`📍 User ${userId} ending WFH day at: ${endDayAddress} (${latitude}, ${longitude})`);
+        } catch (error) {
+          console.warn(`⚠️ Reverse geocoding failed for WFH end location: ${error.message}`);
+          endDayAddress = endDayAddress || (latitude && longitude ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` : 'Work From Home');
+        }
+      }
+    }
+    
     attendanceRecord.endDayTime = endTime;
     if (latitude && longitude) {
       attendanceRecord.endDayLocation = {
         latitude,
         longitude,
-        address,
+        address: endDayAddress || address,
         accuracy
       };
     }
@@ -388,6 +424,101 @@ router.post('/end-day/:userId', auth, async (req, res) => {
     attendanceRecord.autoEnded = false;
 
     await attendanceRecord.save();
+    
+    // =====================================
+    // LOCATION DISCREPANCY DETECTION
+    // =====================================
+    const LocationDiscrepancy = require('../models/LocationDiscrepancy');
+    const MonitoringAlert = require('../models/MonitoringAlert');
+    const LOCATION_DISCREPANCY_THRESHOLD = parseInt(process.env.LOCATION_DISCREPANCY_THRESHOLD) || 5000; // 5km default
+    
+    // Check if both start and end locations exist and calculate distance
+    if (attendanceRecord.startDayLocation && 
+        attendanceRecord.startDayLocation.latitude && 
+        attendanceRecord.endDayLocation && 
+        attendanceRecord.endDayLocation.latitude) {
+      
+      try {
+        const discrepancy = await LocationDiscrepancy.createDiscrepancy({
+          user: userId,
+          attendance: attendanceRecord._id,
+          date: today,
+          startLocation: {
+            latitude: attendanceRecord.startDayLocation.latitude,
+            longitude: attendanceRecord.startDayLocation.longitude,
+            address: attendanceRecord.startDayLocation.address,
+            accuracy: attendanceRecord.startDayLocation.accuracy,
+            timestamp: attendanceRecord.startDayTime
+          },
+          endLocation: {
+            latitude: attendanceRecord.endDayLocation.latitude,
+            longitude: attendanceRecord.endDayLocation.longitude,
+            address: attendanceRecord.endDayLocation.address,
+            accuracy: attendanceRecord.endDayLocation.accuracy,
+            timestamp: endTime
+          },
+          threshold: LOCATION_DISCREPANCY_THRESHOLD
+        });
+        
+        // If discrepancy found, create alert for admin
+        if (discrepancy) {
+          const user = await User.findById(userId).select('name email employeeId');
+          
+          // Create monitoring alert for admin
+          await MonitoringAlert.createAlert({
+            employee: userId,
+            alert_type: 'location_discrepancy',
+            severity: discrepancy.severity,
+            title: '📍 Location Discrepancy Detected',
+            description: `${user?.name || 'Employee'} started and ended day at locations ${discrepancy.distanceKm.toFixed(2)}km apart`,
+            data: {
+              discrepancyId: discrepancy._id,
+              attendanceId: attendanceRecord._id,
+              distanceKm: discrepancy.distanceKm,
+              distanceM: discrepancy.distance,
+              startLocation: {
+                lat: discrepancy.startLocation.latitude,
+                lng: discrepancy.startLocation.longitude,
+                address: discrepancy.startLocation.address
+              },
+              endLocation: {
+                lat: discrepancy.endLocation.latitude,
+                lng: discrepancy.endLocation.longitude,
+                address: discrepancy.endLocation.address
+              },
+              startTime: attendanceRecord.startDayTime,
+              endTime: endTime
+            },
+            status: 'active',
+            auto_generated: true,
+            notification_sent: true,
+            notification_channels: ['dashboard']
+          });
+          
+          // Mark discrepancy as alert sent
+          discrepancy.alertSent = true;
+          discrepancy.alertSentAt = new Date();
+          await discrepancy.save();
+          
+          // Emit socket event for real-time admin notification
+          if (req.io) {
+            req.io.emit('location-discrepancy-alert', {
+              userId,
+              userName: user?.name,
+              discrepancyId: discrepancy._id,
+              distanceKm: discrepancy.distanceKm,
+              severity: discrepancy.severity,
+              timestamp: new Date()
+            });
+          }
+          
+          console.log(`⚠️ Location discrepancy detected for user ${userId}: ${discrepancy.distanceKm}km between start and end locations`);
+        }
+      } catch (error) {
+        console.error('Error checking location discrepancy:', error);
+        // Don't fail the end-day process if discrepancy check fails
+      }
+    }
     
     // Update DailyAttendance record as well
     const DailyAttendance = require('../models/DailyAttendance');
@@ -1460,6 +1591,119 @@ router.post('/confirm-upload', auth, async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: error.message || 'Failed to confirm upload' 
+    });
+  }
+});
+
+// =====================================
+// LOCATION DISCREPANCY ROUTES
+// =====================================
+
+// Get location discrepancies (Admin only)
+router.get('/location-discrepancies', auth, adminAuth, async (req, res) => {
+  try {
+    const { status, severity, startDate, endDate, limit = 50 } = req.query;
+    
+    const LocationDiscrepancy = require('../models/LocationDiscrepancy');
+    const query = {};
+    
+    if (status) query.status = status;
+    if (severity) query.severity = severity;
+    
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.date.$lte = end;
+      }
+    }
+    
+    const discrepancies = await LocationDiscrepancy.find(query)
+      .populate('user', 'name email employeeId department')
+      .populate('attendance', 'startDayTime endDayTime hoursWorked')
+      .sort({ date: -1, distance: -1 })
+      .limit(parseInt(limit));
+    
+    // Get statistics
+    const stats = await LocationDiscrepancy.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+          critical: { $sum: { $cond: [{ $eq: ['$severity', 'critical'] }, 1, 0] } },
+          high: { $sum: { $cond: [{ $eq: ['$severity', 'high'] }, 1, 0] } },
+          avgDistance: { $avg: '$distance' },
+          maxDistance: { $max: '$distance' }
+        }
+      }
+    ]);
+    
+    res.json({
+      success: true,
+      discrepancies,
+      statistics: stats[0] || {
+        total: 0,
+        pending: 0,
+        critical: 0,
+        high: 0,
+        avgDistance: 0,
+        maxDistance: 0
+      },
+      count: discrepancies.length
+    });
+  } catch (error) {
+    console.error('Error fetching location discrepancies:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch location discrepancies'
+    });
+  }
+});
+
+// Update discrepancy status (Admin only)
+router.put('/location-discrepancies/:id', auth, adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, resolutionNotes } = req.body;
+    
+    const LocationDiscrepancy = require('../models/LocationDiscrepancy');
+    const discrepancy = await LocationDiscrepancy.findById(id);
+    
+    if (!discrepancy) {
+      return res.status(404).json({
+        success: false,
+        error: 'Location discrepancy not found'
+      });
+    }
+    
+    if (status) {
+      discrepancy.status = status;
+      if (status === 'reviewed' || status === 'resolved') {
+        discrepancy.reviewedBy = req.user.id;
+        discrepancy.reviewedAt = new Date();
+      }
+    }
+    
+    if (resolutionNotes) {
+      discrepancy.resolutionNotes = resolutionNotes;
+    }
+    
+    await discrepancy.save();
+    
+    res.json({
+      success: true,
+      message: 'Location discrepancy updated successfully',
+      discrepancy
+    });
+  } catch (error) {
+    console.error('Error updating location discrepancy:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update location discrepancy'
     });
   }
 });

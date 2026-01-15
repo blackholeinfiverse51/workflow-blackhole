@@ -18,7 +18,8 @@ const monitoringAlertSchema = new mongoose.Schema({
       'after_hours_activity',
       'application_misuse',
       'task_reminder',
-      'aim_reminder'
+      'aim_reminder',
+      'location_discrepancy'
     ],
     required: true,
     index: true
