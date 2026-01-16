@@ -177,17 +177,18 @@ const BiometricAttendanceDashboard = () => {
 
   const fetchDetailedLogs = async () => {
     try {
-      // Use /api/biometric/daily endpoint
+      // UPDATED: Use new /api/attendance/daily endpoint
       const params = {
         date: dateRange.startDate, // For single date queries
         userId: selectedUser !== 'all' ? selectedUser : undefined,
         departmentId: selectedDepartment !== 'all' ? selectedDepartment : undefined,
       };
       
-      const response = await axios.get(`${API_BASE}/daily`, { ...axiosConfig, params });
+      // Note: The new endpoint returns records per date, so we may need to query a range
+      const response = await axios.get(`${API_BASE.replace('/biometric', '/attendance')}/daily`, { ...axiosConfig, params });
       
       if (response.data.success && response.data.data) {
-        // Map response structure to match expected format
+        // Map new response structure to match expected format
         const mappedLogs = response.data.data.map(record => ({
           _id: record._id,
           date: record.date,
@@ -197,19 +198,20 @@ const BiometricAttendanceDashboard = () => {
             email: record.employee.email,
             department: record.employee.department
           },
-          // Map fields
-          biometricTimeIn: record.firstPunchIn,
-          biometricTimeOut: record.lastPunchOut,
-          totalHoursWorked: record.totalHours,
-          effectiveHours: record.effectiveHours,
-          overtimeHours: record.overtimeHours,
+          // Map new fields to old structure for compatibility
+          biometricTimeIn: record.times.final_in,
+          biometricTimeOut: record.times.final_out,
+          totalHoursWorked: record.times.worked_hours,
           status: record.status,
-          workType: record.workType,
-          punchCount: record.punchCount,
-          // Merge details
+          isPresent: record.isPresent,
+          // NEW FIELDS from merge logic
           mergeDetails: record.mergeDetails,
-          remarks: record.remarks || 'N/A',
-          mergeCase: record.mergeDetails?.case || 'N/A'
+          source: record.verification?.method || 'Biometric',
+          remarks: record.mergeDetails?.remarks || 'N/A',
+          mergeCase: record.mergeDetails?.case || 'N/A',
+          // Salary info
+          basicSalaryForDay: record.salary?.basicForDay || 0,
+          hourlyRate: record.salary?.hourlyRate || 0
         }));
         
         // Filter by status if needed (client-side)
