@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   History, 
   RefreshCw, 
@@ -11,6 +10,8 @@ import {
   Users, 
   IndianRupee, 
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Download,
   FolderOpen,
   Trash2
@@ -22,10 +23,9 @@ import { useToast } from '@/hooks/use-toast';
 const SalaryHistory = () => {
   const [buckets, setBuckets] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedBucket, setSelectedBucket] = useState(null);
-  const [bucketDetails, setBucketDetails] = useState([]);
-  const [detailsLoading, setDetailsLoading] = useState(false);
-  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [expandedBuckets, setExpandedBuckets] = useState(new Set());
+  const [bucketDetailsMap, setBucketDetailsMap] = useState({});
+  const [detailsLoadingMap, setDetailsLoadingMap] = useState({});
   const [deletingBucket, setDeletingBucket] = useState(null);
   const { toast } = useToast();
 
@@ -53,30 +53,48 @@ const SalaryHistory = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleViewBucket = async (bucket) => {
-    setSelectedBucket(bucket);
-    setDetailsDialogOpen(true);
-    setDetailsLoading(true);
+  const toggleBucket = async (bucket) => {
+    const bucketKey = `${bucket.startDate}_${bucket.endDate}`;
+    const isExpanded = expandedBuckets.has(bucketKey);
 
-    try {
-      const response = await api.get('/new-salary/history/bucket-details', {
-        params: {
-          startDate: bucket.startDate,
-          endDate: bucket.endDate
+    if (isExpanded) {
+      // Collapse bucket
+      const newExpanded = new Set(expandedBuckets);
+      newExpanded.delete(bucketKey);
+      setExpandedBuckets(newExpanded);
+    } else {
+      // Expand bucket
+      const newExpanded = new Set(expandedBuckets);
+      newExpanded.add(bucketKey);
+      setExpandedBuckets(newExpanded);
+
+      // Fetch details if not already loaded
+      if (!bucketDetailsMap[bucketKey]) {
+        setDetailsLoadingMap(prev => ({ ...prev, [bucketKey]: true }));
+        try {
+          const response = await api.get('/new-salary/history/bucket-details', {
+            params: {
+              startDate: bucket.startDate,
+              endDate: bucket.endDate
+            }
+          });
+          if (response.success) {
+            setBucketDetailsMap(prev => ({
+              ...prev,
+              [bucketKey]: response.data || []
+            }));
+          }
+        } catch (error) {
+          console.error('Error fetching bucket details:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to fetch bucket details',
+            variant: 'destructive'
+          });
+        } finally {
+          setDetailsLoadingMap(prev => ({ ...prev, [bucketKey]: false }));
         }
-      });
-      if (response.success) {
-        setBucketDetails(response.data || []);
       }
-    } catch (error) {
-      console.error('Error fetching bucket details:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch bucket details',
-        variant: 'destructive'
-      });
-    } finally {
-      setDetailsLoading(false);
     }
   };
 
@@ -385,169 +403,177 @@ const SalaryHistory = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {buckets.map((bucket, index) => (
-              <Card 
-                key={index} 
-                className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-blue-500"
-                onClick={() => handleViewBucket(bucket)}
-              >
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-blue-500/10 rounded-lg">
-                        <Calendar className="h-6 w-6 text-blue-500" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg">
-                          {format(new Date(bucket.startDate), 'dd MMM')} - {format(new Date(bucket.endDate), 'dd MMM yyyy')}
-                        </h3>
-                        <div className="flex items-center gap-4 mt-1">
-                          <Badge variant="secondary" className="gap-1">
-                            <Users className="h-3 w-3" />
-                            {bucket.employeeCount} employees
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {bucket.totalHours?.toFixed(2)} total hours
-                          </span>
+            {buckets.map((bucket, index) => {
+              const bucketKey = `${bucket.startDate}_${bucket.endDate}`;
+              const isExpanded = expandedBuckets.has(bucketKey);
+              const bucketDetails = bucketDetailsMap[bucketKey] || [];
+              const isLoading = detailsLoadingMap[bucketKey];
+
+              return (
+                <Card 
+                  key={index} 
+                  className="border-l-4 border-l-blue-500"
+                >
+                  <CardContent className="p-0">
+                    <div 
+                      className="py-4 px-4 hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => toggleBucket(bucket)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-blue-500/10 rounded-lg">
+                            <Calendar className="h-6 w-6 text-blue-500" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-lg">
+                              {format(new Date(bucket.startDate), 'dd MMM')} - {format(new Date(bucket.endDate), 'dd MMM yyyy')}
+                            </h3>
+                            <div className="flex items-center gap-4 mt-1">
+                              <Badge variant="secondary" className="gap-1">
+                                <Users className="h-3 w-3" />
+                                {bucket.employeeCount} employees
+                              </Badge>
+                              <span className="text-sm text-muted-foreground">
+                                {bucket.totalHours?.toFixed(2)} total hours
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="text-sm text-muted-foreground">Total Salary</p>
+                            <p className="text-xl font-bold text-green-600">
+                              ₹{bucket.totalSalary?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteBucket(e, bucket);
+                            }}
+                            disabled={deletingBucket === bucket}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          {isExpanded ? (
+                            <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                          )}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">Total Salary</p>
-                        <p className="text-xl font-bold text-green-600">
-                          ₹{bucket.totalSalary?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </p>
+
+                    {/* Expanded Content */}
+                    {isExpanded && (
+                      <div className="border-t p-4 space-y-4 bg-muted/30">
+                        {isLoading ? (
+                          <div className="text-center py-8 text-muted-foreground">
+                            Loading details...
+                          </div>
+                        ) : (
+                          <>
+                            {/* Summary */}
+                            <div className="grid grid-cols-3 gap-4 p-4 bg-background rounded-lg">
+                              <div className="text-center">
+                                <p className="text-sm text-muted-foreground">Employees</p>
+                                <p className="text-xl font-bold">{bucketDetails.length}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm text-muted-foreground">Total Hours</p>
+                                <p className="text-xl font-bold">
+                                  {bucketDetails.reduce((sum, r) => sum + (r.totalCumulativeHours || 0), 0).toFixed(2)}
+                                </p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm text-muted-foreground">Total Salary</p>
+                                <p className="text-xl font-bold text-green-600">
+                                  ₹{bucketDetails.reduce((sum, r) => sum + (r.confirmedSalary || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex justify-end gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteBucket(null, bucket);
+                                }}
+                                disabled={deletingBucket === bucket}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete Bucket
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDownloadBucketPDF(bucket, bucketDetails);
+                                }}
+                                className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 border-blue-500/30"
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Download PDF
+                              </Button>
+                            </div>
+
+                            {/* Employee List */}
+                            <div className="overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>#</TableHead>
+                                    <TableHead>Employee</TableHead>
+                                    <TableHead className="text-right">Working Hrs</TableHead>
+                                    <TableHead className="text-right">Holiday Hrs</TableHead>
+                                    <TableHead className="text-right">Total Hrs</TableHead>
+                                    <TableHead className="text-right">Rate</TableHead>
+                                    <TableHead className="text-right">Salary</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {bucketDetails.map((record, idx) => (
+                                    <TableRow key={record._id}>
+                                      <TableCell>{idx + 1}</TableCell>
+                                      <TableCell>
+                                        <div>
+                                          <p className="font-medium">{record.user?.name || 'Unknown'}</p>
+                                          <p className="text-xs text-muted-foreground">{record.user?.department?.name || '-'}</p>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-right">{record.workingHours?.toFixed(2)} hrs</TableCell>
+                                      <TableCell className="text-right">{record.holidayHours || 0} hrs</TableCell>
+                                      <TableCell className="text-right font-medium">{record.totalCumulativeHours?.toFixed(2)} hrs</TableCell>
+                                      <TableCell className="text-right">₹{record.perHourRate}</TableCell>
+                                      <TableCell className="text-right">
+                                        <span className="font-bold text-green-600">
+                                          ₹{record.confirmedSalary?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                        </span>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </>
+                        )}
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={(e) => handleDeleteBucket(e, bucket)}
-                        disabled={deletingBucket === bucket}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 
-        {/* Bucket Details Dialog */}
-        <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-blue-500" />
-                Salary Period Details
-              </DialogTitle>
-              <DialogDescription>
-                {selectedBucket && (
-                  <span>
-                    {format(new Date(selectedBucket.startDate), 'dd MMM yyyy')} - {format(new Date(selectedBucket.endDate), 'dd MMM yyyy')}
-                  </span>
-                )}
-              </DialogDescription>
-            </DialogHeader>
-            
-            {detailsLoading ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Loading details...
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Summary */}
-                <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground">Employees</p>
-                    <p className="text-xl font-bold">{bucketDetails.length}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground">Total Hours</p>
-                    <p className="text-xl font-bold">
-                      {bucketDetails.reduce((sum, r) => sum + (r.totalCumulativeHours || 0), 0).toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground">Total Salary</p>
-                    <p className="text-xl font-bold text-green-600">
-                      ₹{bucketDetails.reduce((sum, r) => sum + (r.confirmedSalary || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex justify-end gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setDetailsDialogOpen(false);
-                      handleDeleteBucket(null, selectedBucket);
-                    }}
-                    disabled={deletingBucket === selectedBucket}
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Bucket
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleDownloadBucketPDF(selectedBucket, bucketDetails)}
-                    className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 border-blue-500/30"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download PDF
-                  </Button>
-                </div>
-
-                {/* Employee List */}
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>#</TableHead>
-                        <TableHead>Employee</TableHead>
-                        <TableHead className="text-right">Working Hrs</TableHead>
-                        <TableHead className="text-right">Holiday Hrs</TableHead>
-                        <TableHead className="text-right">Total Hrs</TableHead>
-                        <TableHead className="text-right">Rate</TableHead>
-                        <TableHead className="text-right">Salary</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {bucketDetails.map((record, index) => (
-                        <TableRow key={record._id}>
-                          <TableCell>{index + 1}</TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{record.user?.name || 'Unknown'}</p>
-                              <p className="text-xs text-muted-foreground">{record.user?.department?.name || '-'}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">{record.workingHours?.toFixed(2)} hrs</TableCell>
-                          <TableCell className="text-right">{record.holidayHours || 0} hrs</TableCell>
-                          <TableCell className="text-right font-medium">{record.totalCumulativeHours?.toFixed(2)} hrs</TableCell>
-                          <TableCell className="text-right">₹{record.perHourRate}</TableCell>
-                          <TableCell className="text-right">
-                            <span className="font-bold text-green-600">
-                              ₹{record.confirmedSalary?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
       </CardContent>
     </Card>
   );
