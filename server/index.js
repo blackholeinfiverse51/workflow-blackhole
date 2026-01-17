@@ -371,6 +371,7 @@ app.use('/api/aims', aimRoutes);
 app.use('/api/user-notifications', userNotificationRoutes);
 app.use("/api/push", pushRoutes) // Added push routes use
 app.use("/api/monitoring", require("./routes/monitoring")); // Employee monitoring routes
+app.use("/api/ems-signals", require("./routes/emsSignals")); // EMS Signal Layer - Real-time activity signals
 app.use("/api/attendance", attendanceRoutes); // Attendance management routes
 app.use("/api/attendance-dashboard", require("./routes/attendanceDashboard")); // Live attendance dashboard routes
 app.use("/api/leave", leaveRoutes); // Leave management routes
