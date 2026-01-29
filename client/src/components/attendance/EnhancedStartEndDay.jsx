@@ -457,7 +457,7 @@ const EnhancedStartEndDay = () => {
                   resolve(locationData);
                 })
                 .catch(() => {
-                  setLocationLoading(false);
+          setLocationLoading(false);
                   // Ensure error has code property
                   if (!retryError.code && retryError.message) {
                     retryError.code = retryError.message.includes('permission') ? 1 : 
@@ -540,7 +540,7 @@ const EnhancedStartEndDay = () => {
               errorTitle = 'Location Error';
               errorMessage = locError.message || 'Unable to get your location. Please try again.';
               break;
-          }
+      }
         } else if (locError.message) {
           if (locError.message.includes('not supported')) {
             errorTitle = 'Geolocation Not Supported';

@@ -435,13 +435,13 @@ const LiveAttendanceMap = ({ attendance }) => {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="w-5 h-5" />
-                Live Location Map
-              </CardTitle>
-              <CardDescription>
-                Real-time employee locations and office proximity
-              </CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="w-5 h-5" />
+            Live Location Map
+          </CardTitle>
+          <CardDescription>
+            Real-time employee locations and office proximity
+          </CardDescription>
             </div>
             {locationDiscrepancies.length > 0 && (
               <Button
@@ -552,7 +552,7 @@ const LiveAttendanceMap = ({ attendance }) => {
                         <Building className="w-5 h-5 mx-auto mb-1 text-red-500" />
                         <strong>Office Location</strong>
                         <p className="text-xs mt-1">{officeLocation.address}</p>
-                      </div>
+                    </div>
                     </Popup>
                   </Marker>
 
@@ -568,21 +568,21 @@ const LiveAttendanceMap = ({ attendance }) => {
                     }}
                   />
 
-                  {/* Employee Markers */}
+                {/* Employee Markers */}
                   {filteredEmployees.map((employee) => {
-                    const distance = calculateDistance(
-                      officeLocation.lat,
-                      officeLocation.lng,
-                      employee.location.latitude,
-                      employee.location.longitude
-                    );
+                  const distance = calculateDistance(
+                    officeLocation.lat,
+                    officeLocation.lng,
+                    employee.location.latitude,
+                    employee.location.longitude
+                  );
                     const isWithinRadius = distance <= OFFICE_RADIUS;
                     const isWFH = employee.workLocationType === 'Home' || 
                                   employee.workPattern === 'Remote' || 
                                   employee.location?.address?.toLowerCase().includes('work from home') ||
                                   employee.location?.address?.toLowerCase().includes('wfh');
-                    
-                    return (
+                  
+                  return (
                       <Marker
                         key={employee.userId || employee._id}
                         position={[employee.location.latitude, employee.location.longitude]}
@@ -619,7 +619,7 @@ const LiveAttendanceMap = ({ attendance }) => {
                                   {getStatusIcon(employee.status)}
                                   <span className="ml-1">{employee.status}</span>
                                 </Badge>
-                              </div>
+                        </div>
                             </div>
                             
                             <div className="space-y-2 text-xs">
@@ -680,7 +680,7 @@ const LiveAttendanceMap = ({ attendance }) => {
                                                 : `${(distance / 1000).toFixed(2)}km`} from office
                                               {isWithinRadius && <span className="ml-1">✓</span>}
                                             </span>
-                                          </div>
+                      </div>
                                         )}
                                         {isWFH && (
                                           <div className="flex items-center gap-2 mt-2">
@@ -707,14 +707,14 @@ const LiveAttendanceMap = ({ attendance }) => {
                                       <p className="text-gray-700 font-medium mb-1">
                                         {employee.location?.address || 'Location not available'}
                                       </p>
-                                    </div>
-                                  </div>
-                                </div>
+                    </div>
+                    </div>
+                    </div>
                               )}
                               
                               {/* Time Info */}
                               <div className="flex items-center justify-between pt-2 border-t">
-                                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                                   {employee.source === 'StartDay' ? (
                                     <Smartphone className="w-3 h-3 text-blue-500" />
                                   ) : employee.source === 'Biometric' ? (
@@ -723,17 +723,17 @@ const LiveAttendanceMap = ({ attendance }) => {
                                     <Building className="w-3 h-3 text-gray-500" />
                                   )}
                                   <span className="text-gray-600">Check In:</span>
-                                </div>
+                    </div>
                                 <span className="font-medium">{formatTime(employee.startTime)}</span>
-                              </div>
+                  </div>
                               
                               {employee.hoursWorked > 0 && (
                                 <div className="flex items-center justify-between pt-2 border-t">
                                   <span className="text-gray-600">Hours Worked:</span>
                                   <span className="font-semibold text-gray-900">{employee.hoursWorked.toFixed(1)}h</span>
-                                </div>
+                </div>
                               )}
-                            </div>
+              </div>
                             
                             <Button
                               variant="outline"
@@ -805,7 +805,7 @@ const LiveAttendanceMap = ({ attendance }) => {
 
               <div className="max-h-96 overflow-y-auto space-y-3">
                 {filteredEmployees.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-gray-500">
                     <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
                     <p>{searchQuery ? 'No employees found' : 'No location data available'}</p>
                     {searchQuery && (
@@ -818,30 +818,30 @@ const LiveAttendanceMap = ({ attendance }) => {
                         Clear search
                       </Button>
                     )}
-                  </div>
-                ) : (
+                </div>
+              ) : (
                   filteredEmployees.map((employee) => {
-                    const distance = calculateDistance(
-                      officeLocation.lat,
-                      officeLocation.lng,
-                      employee.location.latitude,
-                      employee.location.longitude
-                    );
+                  const distance = calculateDistance(
+                    officeLocation.lat,
+                    officeLocation.lng,
+                    employee.location.latitude,
+                    employee.location.longitude
+                  );
                     const isWithinRadius = distance <= OFFICE_RADIUS;
                     const isSelected = selectedEmployee?.userId === employee.userId || selectedEmployee?._id === employee._id;
                     const isHighlighted = highlightedEmployee?.userId === employee.userId || highlightedEmployee?._id === employee._id;
-                    
-                    return (
-                      <motion.div
+                  
+                  return (
+                    <motion.div
                         key={employee.userId || employee._id}
-                        whileHover={{ scale: 1.02 }}
+                      whileHover={{ scale: 1.02 }}
                         className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
                           isSelected
                             ? 'border-blue-500 bg-blue-50 shadow-md' 
                             : isHighlighted
                             ? 'border-green-500 bg-green-50 shadow-sm'
                             : 'border-gray-200 hover:border-gray-400 hover:shadow-sm'
-                        }`}
+                      }`}
                         onClick={() => {
                           setSelectedEmployee(employee);
                           setHighlightedEmployee(employee);
@@ -853,27 +853,27 @@ const LiveAttendanceMap = ({ attendance }) => {
                             });
                           }
                         }}
-                      >
+                    >
                         <div className="flex items-start gap-3">
                             <Avatar className="w-10 h-10 border-2 border-white shadow-sm flex-shrink-0">
                             <AvatarImage src={employee.avatar} />
                             <AvatarFallback className="text-xs font-semibold">
                               {(employee.name || employee.user?.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2)}
-                            </AvatarFallback>
-                          </Avatar>
-                          
-                          <div className="flex-1 min-w-0">
+                          </AvatarFallback>
+                        </Avatar>
+                        
+                        <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-2 flex-wrap">
                               <p className="font-semibold text-sm text-gray-900 break-words">
                                 {employee.name || employee.user?.name || 'Unknown Employee'}
-                              </p>
-                              <Badge 
-                                variant="outline" 
+                            </p>
+                            <Badge 
+                              variant="outline" 
                                 className={`text-xs flex-shrink-0 ${getStatusColor(employee.status).replace('bg-', 'text-').replace('-500', '-600')}`}
-                              >
-                                {getStatusIcon(employee.status)}
-                                <span className="ml-1">{employee.status}</span>
-                              </Badge>
+                            >
+                              {getStatusIcon(employee.status)}
+                              <span className="ml-1">{employee.status}</span>
+                            </Badge>
                               {(employee.workLocationType === 'Home' || 
                                 employee.workPattern === 'Remote' || 
                                 employee.location?.address?.toLowerCase().includes('work from home') ||
@@ -882,8 +882,8 @@ const LiveAttendanceMap = ({ attendance }) => {
                                   🏠 WFH
                                 </Badge>
                               )}
-                            </div>
-                            
+                          </div>
+                          
                             {employee.employeeId && (
                               <div className="flex items-center gap-1 mb-2">
                                 <span className="text-xs text-gray-500">ID:</span>
@@ -956,9 +956,9 @@ const LiveAttendanceMap = ({ attendance }) => {
                                           {isWFH && ' (WFH)'}
                                           {!isWFH && isWithinRadius && (
                                             <span className="ml-1 text-green-500">✓</span>
-                                          )}
-                                        </span>
-                                      </div>
+                              )}
+                            </span>
+                          </div>
                                     </div>
                                   </div>
                                 </div>
@@ -982,16 +982,16 @@ const LiveAttendanceMap = ({ attendance }) => {
                             
                             {/* Check-in Time */}
                             <div className="flex items-center gap-2 text-xs text-gray-600">
-                              {employee.source === 'StartDay' ? (
-                                <Smartphone className="w-3 h-3 text-blue-500" />
-                              ) : employee.source === 'Biometric' ? (
-                                <Monitor className="w-3 h-3 text-green-500" />
-                              ) : (
-                                <Building className="w-3 h-3 text-gray-500" />
-                              )}
+                            {employee.source === 'StartDay' ? (
+                              <Smartphone className="w-3 h-3 text-blue-500" />
+                            ) : employee.source === 'Biometric' ? (
+                              <Monitor className="w-3 h-3 text-green-500" />
+                            ) : (
+                              <Building className="w-3 h-3 text-gray-500" />
+                            )}
                               <Clock className="w-3 h-3 text-gray-400" />
                               <span>Checked in: {formatTime(employee.startTime)}</span>
-                            </div>
+                          </div>
                             
                             {employee.hoursWorked > 0 && (
                               <div className="mt-2 pt-2 border-t border-gray-200">
@@ -1001,12 +1001,12 @@ const LiveAttendanceMap = ({ attendance }) => {
                                 </div>
                               </div>
                             )}
-                          </div>
                         </div>
-                      </motion.div>
-                    );
-                  })
-                )}
+                      </div>
+                    </motion.div>
+                  );
+                })
+              )}
               </div>
             </CardContent>
           </Card>
@@ -1037,9 +1037,9 @@ const LiveAttendanceMap = ({ attendance }) => {
                   <div className="flex justify-between items-center">
                     <span>Status:</span>
                     <div className="flex items-center gap-2">
-                      <Badge className={getStatusColor(selectedEmployee.status).replace('bg-', 'text-').replace('-500', '-600')}>
-                        {selectedEmployee.status}
-                      </Badge>
+                    <Badge className={getStatusColor(selectedEmployee.status).replace('bg-', 'text-').replace('-500', '-600')}>
+                      {selectedEmployee.status}
+                    </Badge>
                       {(selectedEmployee.workLocationType === 'Home' || 
                         selectedEmployee.workPattern === 'Remote' || 
                         selectedEmployee.location?.address?.toLowerCase().includes('work from home') ||
@@ -1107,8 +1107,8 @@ const LiveAttendanceMap = ({ attendance }) => {
                                                   : details.houseNumber !== 'N/A'
                                                     ? details.houseNumber
                                                     : 'N/A'}
-                                            </span>
-                                          </div>
+                    </span>
+                  </div>
                                         )}
                                         {details.area !== 'N/A' && (
                                           <div>
@@ -1284,14 +1284,14 @@ const LiveAttendanceMap = ({ attendance }) => {
                   )}
                   
                   {selectedEmployee.location?.latitude && selectedEmployee.location?.longitude && (
-                    <div className="flex justify-between">
-                      <span>Distance:</span>
+                  <div className="flex justify-between">
+                    <span>Distance:</span>
                       <span className="font-semibold">
-                        {calculateDistance(
-                          officeLocation.lat,
-                          officeLocation.lng,
-                          selectedEmployee.location.latitude,
-                          selectedEmployee.location.longitude
+                      {calculateDistance(
+                        officeLocation.lat,
+                        officeLocation.lng,
+                        selectedEmployee.location.latitude,
+                        selectedEmployee.location.longitude
                         ) <= 1000 
                           ? `${calculateDistance(
                               officeLocation.lat,
@@ -1305,8 +1305,8 @@ const LiveAttendanceMap = ({ attendance }) => {
                               selectedEmployee.location.latitude,
                               selectedEmployee.location.longitude
                             ) / 1000).toFixed(2)}km`} from office
-                      </span>
-                    </div>
+                    </span>
+                  </div>
                   )}
                   
                   {selectedEmployee.hoursWorked > 0 && (

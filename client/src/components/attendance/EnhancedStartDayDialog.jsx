@@ -355,27 +355,27 @@ const EnhancedStartDayDialog = ({ isOpen, onClose, onSuccess }) => {
       // Handle GeolocationPositionError
       // Note: The IP fallback should have already been tried automatically
       if (error.code !== undefined) {
-        switch (error.code) {
+      switch (error.code) {
           case 1: // PERMISSION_DENIED
-          case error.PERMISSION_DENIED:
+        case error.PERMISSION_DENIED:
             errorTitle = 'Location Permission Denied';
             errorMessage = 'Location access is denied. Please enable location permission in your browser settings. The system tried to use IP-based location as a fallback, but it also failed.';
-            break;
+          break;
           case 2: // POSITION_UNAVAILABLE
-          case error.POSITION_UNAVAILABLE:
+        case error.POSITION_UNAVAILABLE:
             errorTitle = 'Location Unavailable';
             errorMessage = 'Your location could not be determined. The system automatically tried IP-based location, but it also failed. Please check your internet connection.';
-            break;
+          break;
           case 3: // TIMEOUT
-          case error.TIMEOUT:
+        case error.TIMEOUT:
             errorTitle = 'Location Timeout';
             errorMessage = 'GPS location timed out. The system automatically tried IP-based location, but it also failed. Please check your internet connection and try again.';
-            break;
-          default:
+          break;
+        default:
             errorTitle = 'Location Error';
             errorMessage = error.message || 'Unable to get your location. The system tried both GPS and IP-based location, but both failed. Please check your internet connection and try again.';
-            break;
-        }
+          break;
+      }
       } else if (error.message) {
         // Handle other error types
         if (error.message.includes('not supported')) {
