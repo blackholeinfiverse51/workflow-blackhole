@@ -67,6 +67,11 @@ export function UserManagement() {
   const [showViewDialog, setShowViewDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  
+  // Delete user states
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [userToDelete, setUserToDelete] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Fetch all users including exited ones
   useEffect(() => {
@@ -229,6 +234,44 @@ export function UserManagement() {
       })
     } finally {
       setIsUpdating(false)
+    }
+  }
+
+  // Delete user handler
+  const handleDeleteUser = (user) => {
+    setUserToDelete(user)
+    setShowDeleteDialog(true)
+  }
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return
+
+    try {
+      setIsDeleting(true)
+      await api.admin.deleteUser(userToDelete._id)
+      
+      // Remove user from local state
+      setUsers(prev => prev.filter(user => user._id !== userToDelete._id))
+      
+      setShowDeleteDialog(false)
+      setUserToDelete(null)
+
+      toast({
+        title: "Success",
+        description: `User "${userToDelete.name}" has been permanently deleted`,
+      })
+    } catch (error) {
+      console.error("Error deleting user:", error)
+      const errorMessage = error.message || "Failed to delete user"
+      toast({
+        title: "Error",
+        description: errorMessage.includes("assigned tasks") 
+          ? "Cannot delete user with assigned tasks. Consider marking as exited instead."
+          : errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -523,6 +566,18 @@ export function UserManagement() {
                                 Reactivate User
                               </DropdownMenuItem>
                             )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-red-600 cursor-pointer"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                handleDeleteUser(user)
+                              }}
+                            >
+                              <Trash className="mr-2 h-4 w-4" />
+                              Delete User
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -892,6 +947,72 @@ export function UserManagement() {
                 <>
                   <CheckCircle className="mr-2 h-4 w-4" />
                   Save Changes
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={(open) => {
+        setShowDeleteDialog(open)
+        if (!open) {
+          setUserToDelete(null)
+        }
+      }}>
+        <DialogContent className="sm:max-w-[450px] border-l-4 border-l-red-600">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash className="h-5 w-5" />
+              Delete User Permanently
+            </DialogTitle>
+            <DialogDescription className="text-base pt-2">
+              {userToDelete && (
+                <div className="space-y-4">
+                  <p>
+                    Are you sure you want to <span className="font-semibold text-red-600">permanently delete</span> the user <strong>"{userToDelete.name}"</strong>?
+                  </p>
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md dark:bg-red-950/30 dark:border-red-800">
+                    <p className="text-sm text-red-800 dark:text-red-300">
+                      <strong>⚠️ Warning:</strong> This action cannot be undone. The user and all their associated data will be permanently removed from the system.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-md dark:bg-amber-950/30 dark:border-amber-800">
+                    <p className="text-sm text-amber-800 dark:text-amber-300">
+                      <strong>Tip:</strong> If you want to keep user history, consider using "Mark as Exited" instead.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteDialog(false)
+                setUserToDelete(null)
+              }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteUser}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash className="mr-2 h-4 w-4" />
+                  Delete Permanently
                 </>
               )}
             </Button>
