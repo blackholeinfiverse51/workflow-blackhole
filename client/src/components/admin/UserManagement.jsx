@@ -568,7 +568,7 @@ export function UserManagement() {
                             )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              className="text-red-600 cursor-pointer"
+                              className="text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 dark:bg-red-950/50 dark:hover:bg-red-900/50 cursor-pointer font-semibold"
                               onClick={(e) => {
                                 e.preventDefault()
                                 e.stopPropagation()
@@ -576,7 +576,7 @@ export function UserManagement() {
                               }}
                             >
                               <Trash className="mr-2 h-4 w-4" />
-                              Delete User
+                              Delete User Permanently
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
