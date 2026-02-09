@@ -80,7 +80,8 @@ router.post('/start-day/:userId', auth, async (req, res) => {
       date: today
     });
     
-    if (existingRecord && existingRecord.startDayTime) {
+    // Only block if day is started AND not ended yet
+    if (existingRecord && existingRecord.startDayTime && !existingRecord.endDayTime) {
       return res.status(400).json({ 
         error: 'Day already started',
         startTime: existingRecord.startDayTime,
@@ -159,8 +160,9 @@ router.post('/start-day/:userId', auth, async (req, res) => {
     let attendanceRecord;
     
     if (existingRecord) {
-      // Update existing record
+      // Update existing record (restart after end-day)
       existingRecord.startDayTime = startTime;
+      existingRecord.endDayTime = undefined; // Clear end time for new work session
       existingRecord.startDayLocation = {
         latitude,
         longitude,

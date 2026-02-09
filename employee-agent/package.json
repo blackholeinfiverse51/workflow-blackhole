@@ -28,6 +28,10 @@
   "build": {
     "appId": "com.employeeagent.app",
     "productName": "Employee Activity Agent",
+    "asar": false,
+    "electronDownload": {
+      "cache": null
+    },
     "directories": {
       "output": "dist"
     },
@@ -38,9 +42,8 @@
     ],
     "win": {
       "target": [
-        "nsis"
-      ],
-      "icon": "assets/icon.ico"
+        "dir"
+      ]
     },
     "mac": {
       "target": [
@@ -48,10 +51,6 @@
       ],
       "icon": "assets/icon.icns",
       "category": "public.app-category.productivity"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
     }
   }
 }

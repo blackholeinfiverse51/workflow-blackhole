@@ -116,12 +116,35 @@ export function EmployeeMonitoring() {
     if (!selectedEmployee) return;
 
     try {
-      const response = await axios.get(`${API_URL}/monitoring/status/${selectedEmployee._id}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      // Fetch real Electron agent activity data
+      const response = await axios.get(`${API_URL}/agent/activity/summary/${selectedEmployee._id}`, {
+        headers: { 'x-auth-token': localStorage.getItem('token') }
       });
-      setMonitoringStatus(response.data);
+      
+      // Transform the response to match expected format
+      const agentData = response.data.summary || {};
+      setMonitoringStatus({
+        isActive: agentData.totalLogs > 0,
+        currentActivity: agentData.avgProductivityScore || 0,
+        screenCaptureEnabled: true,
+        mode: 'ELECTRON_NATIVE',
+        stats: {
+          totalLogs: agentData.totalLogs || 0,
+          keystrokes: agentData.totalKeystrokes || 0,
+          mouseActivity: agentData.totalMouseActivity || 0,
+          idleTime: agentData.totalIdleSeconds || 0,
+          productivity: agentData.avgProductivityScore || 0
+        },
+        recentActivity: agentData.recentLogs || []
+      });
     } catch (error) {
       console.error('Error fetching monitoring status:', error);
+      // Set empty state if no data
+      setMonitoringStatus({
+        isActive: false,
+        currentActivity: 0,
+        stats: { totalLogs: 0, keystrokes: 0, mouseActivity: 0, idleTime: 0, productivity: 0 }
+      });
     }
   };
 
