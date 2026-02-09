@@ -20,6 +20,8 @@ router.post('/activity/ingest', auth, async (req, res) => {
       intervalDuration
     } = req.body;
 
+    console.log('📥 Incoming activity data:', { attendanceId, mouseEvents, keyboardEvents, idleSeconds, intervalDuration, activeApp });
+
     // Validate required fields
     if (!attendanceId) {
       return res.status(400).json({
@@ -38,11 +40,14 @@ router.post('/activity/ingest', auth, async (req, res) => {
     const activeDay = await Attendance.findOne({
       user: req.user.id,
       date: { $gte: today, $lt: tomorrow },
-      startTime: { $exists: true },
-      endTime: { $exists: false }
+      startDayTime: { $exists: true },
+      endDayTime: { $exists: false }
     });
 
+    console.log(`📊 Activity ingestion for user ${req.user.id}: activeDay=${!!activeDay}, attendanceId=${attendanceId}`);
+
     if (!activeDay) {
+      console.warn(`⚠️ Activity rejected: No active day found for user ${req.user.id}`);
       return res.status(403).json({ 
         success: false,
         error: 'Cannot accept activity data: workday not started',
@@ -52,14 +57,17 @@ router.post('/activity/ingest', auth, async (req, res) => {
     }
 
     // Calculate mouse activity score (0-100 based on events per minute)
-    const mouseActivityScore = Math.min(100, Math.round((mouseEvents / (intervalDuration / 60)) * 2));
+    // Safety checks to prevent NaN
+    const validIntervalDuration = intervalDuration && intervalDuration > 0 ? intervalDuration : 30;
+    const validMouseEvents = mouseEvents || 0;
+    const mouseActivityScore = Math.min(100, Math.round((validMouseEvents / (validIntervalDuration / 60)) * 2));
     
     // Create EmployeeActivity document
     const activityData = new EmployeeActivity({
       employee: req.user.id,
       timestamp: timestamp || new Date(),
       keystroke_count: keyboardEvents || 0,
-      mouse_activity_score: mouseActivityScore,
+      mouse_activity_score: isNaN(mouseActivityScore) ? 0 : mouseActivityScore,
       idle_duration: idleSeconds || 0,
       active_application: {
         name: activeApp || 'Unknown',
@@ -67,7 +75,7 @@ router.post('/activity/ingest', auth, async (req, res) => {
       },
       session_id: attendanceId,
       work_hours: {
-        start: activeDay.startTime,
+        start: activeDay.startDayTime,
         end: null
       }
     });

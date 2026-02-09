@@ -227,25 +227,24 @@ class ActivityTracker {
       const isProductive = idleSeconds < idleThreshold;
       const productivePercentage = isProductive ? 100 : Math.max(0, 100 - ((idleSeconds - idleThreshold) / 60));
 
-      // Prepare payload
+      // Prepare payload (flat structure for backend API)
       const payload = {
         attendanceId: this.attendanceId,
         timestamp: new Date().toISOString(),
-        stats: {
-          mouseEvents: this.stats.mouseEvents,
-          keyboardEvents: this.stats.keyboardEvents,
-          idleSeconds: idleSeconds,
-          activeApp: this.stats.activeApp || 'System',
-          productivePercentage: Math.round(productivePercentage),
-          trackingMode: 'ELECTRON_NATIVE' // Using Electron's screen & powerMonitor APIs
-        }
+        mouseEvents: this.stats.mouseEvents,
+        keyboardEvents: this.stats.keyboardEvents,
+        idleSeconds: idleSeconds,
+        activeApp: this.stats.activeApp || 'System',
+        productivePercentage: Math.round(productivePercentage),
+        trackingMode: 'ELECTRON_NATIVE', // Using Electron's screen & powerMonitor APIs
+        intervalDuration: 30 // seconds between transmissions
       };
 
-      console.log(`📤 Sending activity [${payload.stats.trackingMode}]:`, {
-        mouse: payload.stats.mouseEvents,
-        keyboard: payload.stats.keyboardEvents,
-        idle: payload.stats.idleSeconds + 's',
-        productive: payload.stats.productivePercentage + '%'
+      console.log(`📤 Sending activity [${payload.trackingMode}]:`, {
+        mouse: payload.mouseEvents,
+        keyboard: payload.keyboardEvents,
+        idle: payload.idleSeconds + 's',
+        productive: payload.productivePercentage + '%'
       });
 
       // Send to backend
@@ -253,7 +252,12 @@ class ActivityTracker {
       
       if (response.success) {
         console.log('✅ Activity data sent successfully');
-        this.eventEmitter.emit('activity-recorded', payload.stats);
+        this.eventEmitter.emit('activity-recorded', {
+          mouseEvents: payload.mouseEvents,
+          keyboardEvents: payload.keyboardEvents,
+          idleSeconds: payload.idleSeconds,
+          productivePercentage: payload.productivePercentage
+        });
         
         // Reset counters after successful send
         this.resetStats();
