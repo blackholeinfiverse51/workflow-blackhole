@@ -17,7 +17,7 @@ The Electron desktop agent is now **fully integrated** with the existing Express
 ```json
 {
   "email": "testuser@blackhole.com",
-  "password": "Test@123456"
+  "password": "<your_password>"
 }
 ```
 
@@ -567,7 +567,7 @@ async function getAddress(lat, lng) {
 ### Successful Tests
 ✅ Backend starts without critical errors (warning about duplicate index is non-critical)  
 ✅ Electron app connects to backend (127.0.0.1:5001)  
-✅ Test user created: `testuser@blackhole.com` / `Test@123456`  
+✅ Test user created: `testuser@blackhole.com` / (password shown in script output)  
 ✅ JWT token authentication working  
 ✅ Activity route registered and accessible  
 
@@ -665,7 +665,7 @@ netstat -ano | Select-String ":5001.*LISTENING"
 # Test login
 curl -X POST http://127.0.0.1:5001/api/auth/login `
   -H "Content-Type: application/json" `
-  -d '{"email":"testuser@blackhole.com","password":"Test@123456"}'
+  -d '{"email":"testuser@blackhole.com","password":"<YOUR_PASSWORD>"}'
 
 # Test start day
 curl -X POST http://127.0.0.1:5001/api/attendance/start-day/692d357f3400b008f2f464d0 `

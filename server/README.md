@@ -289,7 +289,7 @@ Handles user authentication.
     {
       "name": "John Doe",
       "email": "john.doe@example.com",
-      "password": "password123",
+      "password": "your_secure_password",
       "role": "User",
       "department": "60d5f1b3e7b3c1a2b3c4d5e6" // Optional
     }
@@ -315,7 +315,7 @@ Handles user authentication.
     ```json
     {
       "email": "john.doe@example.com",
-      "password": "password123"
+      "password": "your_password"
     }
     ```
 -   **Response (200)**:

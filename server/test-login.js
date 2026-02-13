@@ -18,8 +18,7 @@ async function testLogin() {
     });
 
     // Test admin login
-    const adminEmail = 'admin.local@infiverse.test';
-    const adminPassword = 'AdminPass123';
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin.local@infiverse.test';
     
     const admin = await User.findOne({ email: adminEmail });
     if (admin) {
@@ -27,16 +26,12 @@ async function testLogin() {
       console.log(`Name: ${admin.name}`);
       console.log(`Email: ${admin.email}`);
       console.log(`Role: ${admin.role}`);
-      console.log(`Password in DB: ${admin.password}`);
-      console.log(`Test Password: ${adminPassword}`);
-      console.log(`Password Match: ${admin.password === adminPassword}`);
     } else {
       console.log('\n❌ Admin user not found');
     }
 
     // Test procurement agent login
-    const procurementEmail = 'procurement@infiverse.test';
-    const procurementPassword = 'ProcurementPass123';
+    const procurementEmail = process.env.PROCUREMENT_EMAIL || 'procurement@infiverse.test';
     
     const procurementAgent = await User.findOne({ email: procurementEmail });
     if (procurementAgent) {
@@ -44,9 +39,6 @@ async function testLogin() {
       console.log(`Name: ${procurementAgent.name}`);
       console.log(`Email: ${procurementAgent.email}`);
       console.log(`Role: ${procurementAgent.role}`);
-      console.log(`Password in DB: ${procurementAgent.password}`);
-      console.log(`Test Password: ${procurementPassword}`);
-      console.log(`Password Match: ${procurementAgent.password === procurementPassword}`);
     } else {
       console.log('\n❌ Procurement agent not found');
     }

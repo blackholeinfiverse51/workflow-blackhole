@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+require('dotenv').config();
 
 /**
  * Test Real Activity Tracking
@@ -20,9 +21,17 @@ async function testWorkflow() {
   try {
     // Step 1: Login
     console.log('\n📝 Step 1: Login as employee...');
+    const testEmail = process.env.TEST_EMAIL;
+    const testPassword = process.env.TEST_PASSWORD;
+    
+    if (!testEmail || !testPassword) {
+      console.error('❌ Error: TEST_EMAIL and TEST_PASSWORD environment variables are required');
+      process.exit(1);
+    }
+    
     const loginResponse = await axios.post(`${API_URL}/api/auth/login`, {
-      email: 'sharcongaming@gmail.com', // Update with actual test email
-      password: 'test123' // Update with actual password
+      email: testEmail,
+      password: testPassword
     });
     
     authToken = loginResponse.data.token;

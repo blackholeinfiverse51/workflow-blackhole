@@ -301,7 +301,7 @@ The agent expects these backend endpoints:
 // Request
 {
   "email": "user@company.com",
-  "password": "password123"
+  "password": "<your_password>"
 }
 
 // Response

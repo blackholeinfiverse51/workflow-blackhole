@@ -445,7 +445,7 @@ app.use('/api/activity', activityRoutes);
 # 1. Login
 curl -X POST http://localhost:5000/api/agent/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"employee@company.com","password":"password123"}'
+  -d '{"email":"employee@company.com","password":"<your_password>"}'
 
 # Response: {"success":true,"token":"eyJhbGc...","user":{...}}
 

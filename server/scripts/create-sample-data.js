@@ -1,3 +1,5 @@
+require('dotenv').config();
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Salary = require('../models/Salary');
@@ -5,7 +7,12 @@ const Attendance = require('../models/Attendance');
 const Department = require('../models/Department');
 
 // Connect to MongoDB
-mongoose.connect('mongodb://localhost:27017/infiverse-bhl');
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/infiverse-bhl');
+
+// Generate secure random password
+function generatePassword() {
+  return crypto.randomBytes(12).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
+}
 
 const sampleDepartments = [
   { name: 'Engineering', description: 'Software Development', color: 'bg-blue-500' },
@@ -14,11 +21,11 @@ const sampleDepartments = [
   { name: 'Finance', description: 'Finance and Accounting', color: 'bg-yellow-500' }
 ];
 
+// Passwords will be generated at runtime
 const sampleUsers = [
   {
     name: 'John Doe',
     email: 'john.doe@company.com',
-    password: 'password123',
     role: 'User',
     departmentName: 'Engineering',
     employeeId: 'EMP001',
@@ -27,7 +34,6 @@ const sampleUsers = [
   {
     name: 'Jane Smith',
     email: 'jane.smith@company.com',
-    password: 'password123',
     role: 'User',
     departmentName: 'Marketing',
     employeeId: 'EMP002',
@@ -36,7 +42,6 @@ const sampleUsers = [
   {
     name: 'Mike Johnson',
     email: 'mike.johnson@company.com',
-    password: 'password123',
     role: 'User',
     departmentName: 'HR',
     employeeId: 'EMP003',
@@ -45,7 +50,6 @@ const sampleUsers = [
   {
     name: 'Sarah Wilson',
     email: 'sarah.wilson@company.com',
-    password: 'password123',
     role: 'User',
     departmentName: 'Finance',
     employeeId: 'EMP004',
@@ -54,7 +58,6 @@ const sampleUsers = [
   {
     name: 'Admin User',
     email: 'admin@company.com',
-    password: 'admin123',
     role: 'Admin',
     departmentName: 'Engineering',
     employeeId: 'ADM001',
@@ -82,6 +85,7 @@ async function createSampleData() {
     // Create users
     console.log('👥 Creating users...');
     const createdUsers = [];
+    const generatedCredentials = [];
 
     for (const userData of sampleUsers) {
       const existingUser = await User.findOne({ email: userData.email });
@@ -89,11 +93,14 @@ async function createSampleData() {
       if (!existingUser) {
         // Find department by name
         const department = await Department.findOne({ name: userData.departmentName });
+        
+        // Generate secure random password
+        const password = generatePassword();
 
         const user = new User({
           name: userData.name,
           email: userData.email,
-          password: userData.password,
+          password: password,
           role: userData.role,
           department: department ? department._id : null,
           employeeId: userData.employeeId,
@@ -104,11 +111,22 @@ async function createSampleData() {
 
         await user.save();
         createdUsers.push(user);
+        generatedCredentials.push({ email: userData.email, password, name: userData.name });
         console.log(`✅ Created user: ${userData.name} (${userData.email})`);
       } else {
         createdUsers.push(existingUser);
         console.log(`⏭️  User already exists: ${userData.name}`);
       }
+    }
+
+    // Print generated credentials (IMPORTANT: Save these securely!)
+    if (generatedCredentials.length > 0) {
+      console.log('\\n⚠️  IMPORTANT: Save these credentials securely!');
+      console.log('==========================================');
+      for (const cred of generatedCredentials) {
+        console.log(`${cred.name}: ${cred.email} / ${cred.password}`);
+      }
+      console.log('==========================================\\n');
     }
 
     // Create salary records
@@ -230,9 +248,7 @@ async function createSampleData() {
     console.log(`   💰 Salary Records: ${salaryCount}`);
     console.log(`   📅 Attendance Records: ${attendanceCount}`);
     console.log(`   📁 Departments: ${departmentCount}`);
-    console.log('\n🔑 Login Credentials:');
-    console.log('   Admin: admin@company.com / admin123');
-    console.log('   Employee: john.doe@company.com / password123');
+    console.log('\n🔑 Login Credentials: Printed above (save them securely!)');
     
     process.exit(0);
     
