@@ -16,7 +16,7 @@ export const ProtectedRoute = ({ children }) => {
 
   if (user.role === "User") {
     // Allow access to /userdashboard and /tasks/* (including /tasks/:id)
-     if (location.pathname !== "/userdashboard" && !location.pathname.startsWith("/tasks/") && location.pathname !== "/progress" && location.pathname !== "/aims" && location.pathname !== "/leaderboard"&& location.pathname !== "/leave-request"&&!location.pathname.startsWith("/settings") ) {
+     if (location.pathname !== "/userdashboard" && location.pathname !== "/my-tasks" && !location.pathname.startsWith("/tasks/") && location.pathname !== "/progress" && location.pathname !== "/aims" && location.pathname !== "/leaderboard"&& location.pathname !== "/leave-request"&&!location.pathname.startsWith("/settings") ) {
       return <Navigate to="/userdashboard" replace />
     }
   }
