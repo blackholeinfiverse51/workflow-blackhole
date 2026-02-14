@@ -22,17 +22,23 @@ async function run() {
     // pick an existing department if any
     const dept = await Department.findOne();
 
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword) {
+      console.error('Error: ADMIN_PASSWORD environment variable is required');
+      process.exit(1);
+    }
+
     const newUser = new User({
       name: 'Local Admin',
       email: adminEmail,
-      password: 'AdminPass123',
+      password: adminPassword,
       role: 'Admin',
       department: dept ? dept._id : undefined,
       stillExist: 1,
     });
 
     const saved = await newUser.save();
-    console.log('Admin user created:', saved._id.toString(), 'email:', adminEmail, 'password: AdminPass123');
+    console.log('Admin user created:', saved._id.toString(), 'email:', adminEmail);
     process.exit(0);
   } catch (err) {
     console.error('Seeding admin error:', err);

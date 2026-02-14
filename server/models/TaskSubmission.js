@@ -126,6 +126,10 @@ const TaskSubmissionSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  resubmittedAt: {
+    type: Date,
+    default: null,
+  },
 })
 
 // Update the updatedAt field before saving

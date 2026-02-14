@@ -5,14 +5,12 @@ const ExcelJS = require('exceljs');
 const XLSX = require('xlsx');
 const fs = require('fs');
 const geolib = require('geolib');
-const mongoose = require('mongoose');
 const Attendance = require('../models/Attendance');
 const User = require('../models/User');
 const UserTag = require('../models/UserTag');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
 const DailyAttendance = require('../models/DailyAttendance');
-const { reverseGeocode } = require('../utils/reverseGeocode');
 
 // SIMPLE RULE: Spam validation = EXACTLY 8 hours for cumulative calculation
 const SPAM_VALIDATION_HOURS = 8;
@@ -52,11 +50,103 @@ const MAX_WORKING_HOURS = parseInt(process.env.MAX_WORKING_HOURS) || 10;
 const AUTO_END_DAY_ENABLED = process.env.AUTO_END_DAY_ENABLED === 'true';
 const OFFICE_ADDRESS = 'Blackhole Infiverse LLP, Road Number 3, near Hathi Circle, above Bright Connection, Kala Galli, Motilal Nagar II, Goregaon West, Mumbai, Maharashtra';
 
+// Simple start day route for backward compatibility (used by test and simple clients)
+router.post('/start', auth, async (req, res) => {
+  try {
+    const userId = req.user.id; // Get userId from auth token
+    const { location, notes, latitude, longitude, address, accuracy, workFromHome, homeLocation } = req.body;
+    
+    // Extract coordinates - support both direct and nested location formats
+    const finalLatitude = latitude || (location && location.latitude);
+    const finalLongitude = longitude || (location && location.longitude);
+    const finalAddress = address || (location && location.address) || 'Location not specified';
+    const isWorkFromHome = workFromHome || (location && location.type === 'home');
+    
+    // Get today's date range
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Check if user has already started day
+    let existingRecord = await Attendance.findOne({
+      user: userId,
+      date: { $gte: today, $lt: tomorrow }
+    });
+
+    // Only block if day is started AND not ended yet
+    if (existingRecord && existingRecord.startDayTime && !existingRecord.endDayTime) {
+      return res.status(400).json({
+        error: 'Day already started',
+        startTime: existingRecord.startDayTime,
+        code: 'DAY_ALREADY_STARTED'
+      });
+    }
+
+    const startTime = new Date();
+    const workLocation = isWorkFromHome ? 'Home' : 'Office';
+
+    if (existingRecord) {
+      // Update existing record (restart after end-day)
+      existingRecord.startDayTime = startTime;
+      existingRecord.endDayTime = null;
+      existingRecord.startDayLocation = { 
+        latitude: finalLatitude, 
+        longitude: finalLongitude, 
+        address: finalAddress, 
+        accuracy 
+      };
+      existingRecord.workLocation = workLocation;
+      existingRecord.notes = notes || existingRecord.notes;
+      await existingRecord.save();
+    } else {
+      // Create new record
+      existingRecord = new Attendance({
+        user: userId,
+        date: today,
+        startDayTime: startTime,
+        startDayLocation: {
+          latitude: finalLatitude,
+          longitude: finalLongitude, 
+          address: finalAddress,
+          accuracy
+        },
+        workLocation,
+        notes,
+        officeHours: 0,
+        remoteHours: 0,
+        activities: [{
+          type: 'StartDay',
+          timestamp: startTime,
+          location: { latitude: finalLatitude, longitude: finalLongitude, address: finalAddress },
+          source: 'StartDay'
+        }]
+      });
+      await existingRecord.save();
+    }
+
+    console.log(`✅ User ${userId} started work day at ${startTime} (${workLocation})`);
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Work day started successfully',
+      attendance: existingRecord,
+      startTime: existingRecord.startDayTime
+    });
+  } catch (error) {
+    console.error('Simple start route error:', error);
+    return res.status(500).json({
+      error: 'Failed to start work day',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Enhanced start day with geolocation validation and work from home option
 router.post('/start-day/:userId', auth, async (req, res) => {
   try {
     const { userId } = req.params;
-    let { latitude, longitude, address, accuracy, workFromHome, homeLocation } = req.body;
+    const { latitude, longitude, address, accuracy, workFromHome, homeLocation } = req.body;
     
     // Verify user authorization
     if (req.user.id !== userId && req.user.role !== 'Admin') {
@@ -163,71 +253,46 @@ router.post('/start-day/:userId', auth, async (req, res) => {
       // Update existing record (restart after end-day)
       existingRecord.startDayTime = startTime;
       existingRecord.endDayTime = undefined; // Clear end time for new work session
-      existingRecord.startDayLocation = {
-        latitude,
-        longitude,
-        address: finalAddress,
-        accuracy
-      };
-      existingRecord.workPattern = workFromHome ? 'Remote' : 'Regular';
+      existingRecord.startDayLocation = { latitude, longitude, address: finalAddress, accuracy };
+      existingRecord.workLocationType = workLocationType;
+      existingRecord.locationValidated = locationValidated;
       existingRecord.isPresent = true;
-      existingRecord.isVerified = locationValidated;
-      existingRecord.spamStatus = 'Valid'; // Normal start-day flow - not spam
+      existingRecord.spamStatus = 'Valid';
       existingRecord.autoEnded = false;
-      
-      if (existingRecord.source === 'Biometric') {
-        existingRecord.source = 'Both';
-      } else {
-        existingRecord.source = 'StartDay';
-      }
-      
       attendanceRecord = existingRecord;
+      await attendanceRecord.save();
     } else {
-      // Create new record
       attendanceRecord = new Attendance({
         user: userId,
         date: today,
         startDayTime: startTime,
-        startDayLocation: {
-          latitude,
-          longitude,
-          address: finalAddress,
-          accuracy
-        },
-        workPattern: workFromHome ? 'Remote' : 'Regular',
+        startDayLocation: { latitude, longitude, address: finalAddress, accuracy },
+        workLocationType: workLocationType,
+        locationValidated: locationValidated,
         isPresent: true,
-        isVerified: locationValidated,
-        source: 'StartDay',
-        spamStatus: 'Valid', // Normal start-day flow - not spam
+        spamStatus: 'Valid',
         autoEnded: false
       });
+      await attendanceRecord.save();
     }
-    
-    await attendanceRecord.save();
-    
-    // Also create/update DailyAttendance record for enhanced tracking
-    const DailyAttendance = require('../models/DailyAttendance');
-    
-    let dailyRecord = await DailyAttendance.findOne({
+
+    // Now handle DailyAttendance
+    const existingDailyRecord = await DailyAttendance.findOne({
       user: userId,
       date: today
     });
-    
-    if (dailyRecord) {
-      // Update existing daily record
-      dailyRecord.startDayTime = startTime;
-      dailyRecord.startDayLocation = {
-        latitude,
-        longitude,
-        address: finalAddress,
-        accuracy
-      };
-      dailyRecord.workLocationType = workLocationType;
-      dailyRecord.isPresent = true;
-      dailyRecord.status = 'Present';
-      dailyRecord.source = 'StartDay';
-      dailyRecord.spamStatus = 'Valid'; // Normal start-day flow - not spam
-      dailyRecord.autoEnded = false;
+
+    let dailyRecord;
+    if (existingDailyRecord) {
+      existingDailyRecord.startDayTime = startTime;
+      existingDailyRecord.startDayLocation = { latitude, longitude, address: finalAddress, accuracy };
+      existingDailyRecord.workLocationType = workLocationType;
+      existingDailyRecord.isPresent = true;
+      existingDailyRecord.status = 'Present';
+      existingDailyRecord.source = 'StartDay';
+      existingDailyRecord.spamStatus = 'Valid';
+      existingDailyRecord.autoEnded = false;
+      dailyRecord = existingDailyRecord;
     } else {
       // Create new daily record
       dailyRecord = new DailyAttendance({
@@ -237,14 +302,14 @@ router.post('/start-day/:userId', auth, async (req, res) => {
         startDayLocation: {
           latitude,
           longitude,
-          address: finalAddress,
+          address: finalAddress || (workFromHome ? 'Work From Home' : 'Office Location'),
           accuracy
         },
         workLocationType: workLocationType,
         isPresent: true,
         status: 'Present',
         source: 'StartDay',
-        spamStatus: 'Valid', // Normal start-day flow - not spam
+        spamStatus: 'Valid',
         autoEnded: false
       });
     }
@@ -252,27 +317,22 @@ router.post('/start-day/:userId', auth, async (req, res) => {
     await dailyRecord.save();
     
     // Update today's aim with work location if it exists (don't create default aims)
-    try {
-      const Aim = require('../models/Aim');
-      let todayAim = await Aim.findOne({
-        user: userId,
-        date: {
-          $gte: today,
-          $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000)
-        }
-      });
-      
-      if (todayAim) {
-        // Update existing aim with work location
-        todayAim.workLocation = workLocationType;
-        await todayAim.save();
-        console.log(`🏢 Updated aim work location to ${workLocationType} for user ${userId}`);
-      } else {
-        console.log(`📝 No aim found for user ${userId} - user should set their own aim`);
+    const Aim = require('../models/Aim');
+    let todayAim = await Aim.findOne({
+      user: userId,
+      date: {
+        $gte: today,
+        $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000)
       }
-    } catch (aimError) {
-      // Don't fail start-day if aim update fails
-      console.warn(`⚠️ Failed to update aim work location for user ${userId}:`, aimError.message);
+    });
+    
+    if (todayAim) {
+      // Update existing aim with work location
+      todayAim.workLocation = workLocationType;
+      await todayAim.save();
+      console.log(`🏢 Updated aim work location to ${workLocationType} for user ${userId}`);
+    } else {
+      console.log(`📝 No aim found for user ${userId} - user should set their own aim`);
     }
     
     // Emit socket event
@@ -298,12 +358,10 @@ router.post('/start-day/:userId', auth, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Start day error:', error);
-    console.error('Error stack:', error.stack);
+    console.error('Start day error:', error);
     res.status(500).json({ 
       error: 'Failed to start day',
-      details: error.message,
-      code: 'START_DAY_ERROR'
+      details: error.message 
     });
   }
 });
@@ -391,35 +449,12 @@ router.post('/end-day/:userId', auth, async (req, res) => {
     
     const endTime = new Date();
     
-    // Check if this is a WFH employee and get exact address if needed
-    const isWFH = attendanceRecord.workPattern === 'Remote' || 
-                   attendanceRecord.startDayLocation?.address?.toLowerCase().includes('work from home') ||
-                   attendanceRecord.startDayLocation?.address?.toLowerCase().includes('wfh');
-    
-    let endDayAddress = address;
-    
-    // If WFH and address is not provided or is generic, reverse geocode to get exact address
-    if (isWFH && (!endDayAddress || endDayAddress === 'Work From Home' || endDayAddress.toLowerCase().includes('work from home'))) {
-      if (latitude && longitude) {
-        try {
-          const geocodeResult = await reverseGeocode(latitude, longitude);
-          endDayAddress = geocodeResult.fullAddress || geocodeResult.displayName || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-          console.log(`📍 User ${userId} ending WFH day at: ${endDayAddress} (${latitude}, ${longitude})`);
-        } catch (error) {
-          console.warn(`⚠️ Reverse geocoding failed for WFH end location: ${error.message}`);
-          endDayAddress = latitude && longitude ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` : 'Work From Home';
-        }
-      } else {
-        endDayAddress = endDayAddress || 'Work From Home';
-      }
-    }
-    
     attendanceRecord.endDayTime = endTime;
     if (latitude && longitude) {
       attendanceRecord.endDayLocation = {
         latitude,
         longitude,
-        address: endDayAddress || address,
+        address,
         accuracy
       };
     }
@@ -453,101 +488,6 @@ router.post('/end-day/:userId', auth, async (req, res) => {
     attendanceRecord.autoEnded = false;
 
     await attendanceRecord.save();
-    
-    // =====================================
-    // LOCATION DISCREPANCY DETECTION
-    // =====================================
-    const LocationDiscrepancy = require('../models/LocationDiscrepancy');
-    const MonitoringAlert = require('../models/MonitoringAlert');
-    const LOCATION_DISCREPANCY_THRESHOLD = parseInt(process.env.LOCATION_DISCREPANCY_THRESHOLD) || 5000; // 5km default
-    
-    // Check if both start and end locations exist and calculate distance
-    if (attendanceRecord.startDayLocation && 
-        attendanceRecord.startDayLocation.latitude && 
-        attendanceRecord.endDayLocation && 
-        attendanceRecord.endDayLocation.latitude) {
-      
-      try {
-        const discrepancy = await LocationDiscrepancy.createDiscrepancy({
-          user: userId,
-          attendance: attendanceRecord._id,
-          date: today,
-          startLocation: {
-            latitude: attendanceRecord.startDayLocation.latitude,
-            longitude: attendanceRecord.startDayLocation.longitude,
-            address: attendanceRecord.startDayLocation.address,
-            accuracy: attendanceRecord.startDayLocation.accuracy,
-            timestamp: attendanceRecord.startDayTime
-          },
-          endLocation: {
-            latitude: attendanceRecord.endDayLocation.latitude,
-            longitude: attendanceRecord.endDayLocation.longitude,
-            address: attendanceRecord.endDayLocation.address,
-            accuracy: attendanceRecord.endDayLocation.accuracy,
-            timestamp: endTime
-          },
-          threshold: LOCATION_DISCREPANCY_THRESHOLD
-        });
-        
-        // If discrepancy found, create alert for admin
-        if (discrepancy) {
-          const user = await User.findById(userId).select('name email employeeId');
-          
-          // Create monitoring alert for admin
-          await MonitoringAlert.createAlert({
-            employee: userId,
-            alert_type: 'location_discrepancy',
-            severity: discrepancy.severity,
-            title: '📍 Location Discrepancy Detected',
-            description: `${user?.name || 'Employee'} started and ended day at locations ${discrepancy.distanceKm.toFixed(2)}km apart`,
-            data: {
-              discrepancyId: discrepancy._id,
-              attendanceId: attendanceRecord._id,
-              distanceKm: discrepancy.distanceKm,
-              distanceM: discrepancy.distance,
-              startLocation: {
-                lat: discrepancy.startLocation.latitude,
-                lng: discrepancy.startLocation.longitude,
-                address: discrepancy.startLocation.address
-              },
-              endLocation: {
-                lat: discrepancy.endLocation.latitude,
-                lng: discrepancy.endLocation.longitude,
-                address: discrepancy.endLocation.address
-              },
-              startTime: attendanceRecord.startDayTime,
-              endTime: endTime
-            },
-            status: 'active',
-            auto_generated: true,
-            notification_sent: true,
-            notification_channels: ['dashboard']
-          });
-          
-          // Mark discrepancy as alert sent
-          discrepancy.alertSent = true;
-          discrepancy.alertSentAt = new Date();
-          await discrepancy.save();
-          
-          // Emit socket event for real-time admin notification
-          if (req.io) {
-            req.io.emit('location-discrepancy-alert', {
-              userId,
-              userName: user?.name,
-              discrepancyId: discrepancy._id,
-              distanceKm: discrepancy.distanceKm,
-              severity: discrepancy.severity,
-              timestamp: new Date()
-            });
-          }
-          
-          console.log(`⚠️ Location discrepancy detected for user ${userId}: ${discrepancy.distanceKm}km between start and end locations`);
-        }
-      } catch (error) {
-        console.error('Error checking location discrepancy:', error);
-        // Don't fail the end-day process if discrepancy check fails
-      }
-    }
     
     // Update DailyAttendance record as well
     const DailyAttendance = require('../models/DailyAttendance');
@@ -609,12 +549,10 @@ router.post('/end-day/:userId', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ End day error:', error);
-    console.error('Error stack:', error.stack);
+    console.error('End day error:', error);
     res.status(500).json({ 
       error: 'Failed to end day',
-      details: error.message,
-      code: 'END_DAY_ERROR'
+      details: error.message 
     });
   }
 });
@@ -931,77 +869,6 @@ router.post('/auto-end-day', auth, async (req, res) => {
 // });
 
 // Get attendance analytics
-// Reverse geocode endpoint (for frontend to get address details)
-// IMPORTANT: This route must be defined before parameterized routes like /user/:userId
-router.get('/reverse-geocode', auth, async (req, res) => {
-  try {
-    const { latitude, longitude } = req.query;
-    
-    if (!latitude || !longitude) {
-      return res.status(400).json({
-        success: false,
-        error: 'Latitude and longitude are required'
-      });
-    }
-    
-    const lat = parseFloat(latitude);
-    const lng = parseFloat(longitude);
-    
-    if (isNaN(lat) || isNaN(lng)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid latitude or longitude'
-      });
-    }
-    
-    console.log(`📍 Reverse geocoding request for: ${lat}, ${lng}`);
-    const geocodeResult = await reverseGeocode(lat, lng);
-    console.log(`✅ Reverse geocoding result:`, {
-      fullAddress: geocodeResult.fullAddress,
-      area: geocodeResult.area,
-      city: geocodeResult.city,
-      state: geocodeResult.state,
-      pincode: geocodeResult.pincode
-    });
-    
-    // Build formatted address from components
-    const addressParts = [];
-    if (geocodeResult.houseNumber) addressParts.push(geocodeResult.houseNumber);
-    if (geocodeResult.road) addressParts.push(geocodeResult.road);
-    if (geocodeResult.area) addressParts.push(geocodeResult.area);
-    if (geocodeResult.city) addressParts.push(geocodeResult.city);
-    if (geocodeResult.state) addressParts.push(geocodeResult.state);
-    if (geocodeResult.pincode) addressParts.push(geocodeResult.pincode);
-    if (geocodeResult.country) addressParts.push(geocodeResult.country);
-    
-    const formattedAddress = addressParts.length > 0 
-      ? addressParts.join(', ')
-      : geocodeResult.fullAddress || geocodeResult.displayName;
-    
-    res.json({
-      success: true,
-      data: {
-        fullAddress: geocodeResult.fullAddress || geocodeResult.displayName,
-        displayName: geocodeResult.displayName,
-        pincode: geocodeResult.pincode || 'N/A',
-        area: geocodeResult.area || 'N/A',
-        city: geocodeResult.city || 'N/A',
-        state: geocodeResult.state || 'N/A',
-        country: geocodeResult.country || 'N/A',
-        road: geocodeResult.road || 'N/A',
-        houseNumber: geocodeResult.houseNumber || 'N/A',
-        formattedAddress: formattedAddress || geocodeResult.fullAddress || geocodeResult.displayName
-      }
-    });
-  } catch (error) {
-    console.error('❌ Reverse geocoding error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to reverse geocode location'
-    });
-  }
-});
-
 router.get('/analytics', auth, async (req, res) => {
   try {
     const { startDate, endDate, userId, department } = req.query;
@@ -1693,119 +1560,6 @@ router.post('/confirm-upload', auth, async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: error.message || 'Failed to confirm upload' 
-    });
-  }
-});
-
-// =====================================
-// LOCATION DISCREPANCY ROUTES
-// =====================================
-
-// Get location discrepancies (Admin only)
-router.get('/location-discrepancies', auth, adminAuth, async (req, res) => {
-  try {
-    const { status, severity, startDate, endDate, limit = 50 } = req.query;
-    
-    const LocationDiscrepancy = require('../models/LocationDiscrepancy');
-    const query = {};
-    
-    if (status) query.status = status;
-    if (severity) query.severity = severity;
-    
-    if (startDate || endDate) {
-      query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        query.date.$lte = end;
-      }
-    }
-    
-    const discrepancies = await LocationDiscrepancy.find(query)
-      .populate('user', 'name email employeeId department')
-      .populate('attendance', 'startDayTime endDayTime hoursWorked')
-      .sort({ date: -1, distance: -1 })
-      .limit(parseInt(limit));
-    
-    // Get statistics
-    const stats = await LocationDiscrepancy.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: 1 },
-          pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
-          critical: { $sum: { $cond: [{ $eq: ['$severity', 'critical'] }, 1, 0] } },
-          high: { $sum: { $cond: [{ $eq: ['$severity', 'high'] }, 1, 0] } },
-          avgDistance: { $avg: '$distance' },
-          maxDistance: { $max: '$distance' }
-        }
-      }
-    ]);
-    
-    res.json({
-      success: true,
-      discrepancies,
-      statistics: stats[0] || {
-        total: 0,
-        pending: 0,
-        critical: 0,
-        high: 0,
-        avgDistance: 0,
-        maxDistance: 0
-      },
-      count: discrepancies.length
-    });
-  } catch (error) {
-    console.error('Error fetching location discrepancies:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to fetch location discrepancies'
-    });
-  }
-});
-
-// Update discrepancy status (Admin only)
-router.put('/location-discrepancies/:id', auth, adminAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status, resolutionNotes } = req.body;
-    
-    const LocationDiscrepancy = require('../models/LocationDiscrepancy');
-    const discrepancy = await LocationDiscrepancy.findById(id);
-    
-    if (!discrepancy) {
-      return res.status(404).json({
-        success: false,
-        error: 'Location discrepancy not found'
-      });
-    }
-    
-    if (status) {
-      discrepancy.status = status;
-      if (status === 'reviewed' || status === 'resolved') {
-        discrepancy.reviewedBy = req.user.id;
-        discrepancy.reviewedAt = new Date();
-      }
-    }
-    
-    if (resolutionNotes) {
-      discrepancy.resolutionNotes = resolutionNotes;
-    }
-    
-    await discrepancy.save();
-    
-    res.json({
-      success: true,
-      message: 'Location discrepancy updated successfully',
-      discrepancy
-    });
-  } catch (error) {
-    console.error('Error updating location discrepancy:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to update location discrepancy'
     });
   }
 });

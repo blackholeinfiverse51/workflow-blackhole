@@ -118,8 +118,8 @@ fetch('http://localhost:5000/api/auth/register', {
   },
   body: JSON.stringify({
     name: 'Test Admin',
-    email: 'admin@test.com',
-    password: 'admin123',
+    email: '<your_email>',
+    password: '<your_password>',
     role: 'Admin'
   })
 })
@@ -137,8 +137,8 @@ fetch('http://localhost:5000/api/auth/login', {
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    email: 'admin@test.com',
-    password: 'admin123'
+    email: '<your_email>',
+    password: '<your_password>'
   })
 })
 .then(res => res.json())
@@ -160,7 +160,7 @@ fetch('http://localhost:5000/api/auth/login', {
    ```
    Name: Your Full Name
    Email: youremail@example.com
-   Password: YourPassword123 (min 6 chars)
+   Password: <your_password> (min 6 chars)
    Role: Admin (for testing)
    ```
 
@@ -180,8 +180,8 @@ fetch('http://localhost:5000/api/auth/login', {
 # Test registration
 $body = @{
     name = "Test Admin"
-    email = "admin@test.com"
-    password = "admin123"
+    email = "<your_email>"
+    password = "<your_password>"
     role = "Admin"
 } | ConvertTo-Json
 
@@ -192,8 +192,8 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/auth/register" `
 
 # Test login
 $loginBody = @{
-    email = "admin@test.com"
-    password = "admin123"
+    email = "<your_email>"
+    password = "<your_password>"
 } | ConvertTo-Json
 
 Invoke-WebRequest -Uri "http://localhost:5000/api/auth/login" `

@@ -209,11 +209,12 @@ router.post("/", auth, upload.single("document"), async (req, res) => {
   }
 })
 
-// Update submission - ONLY ALLOW ACTIVE USERS
+// Update submission - ONLY ALLOW ACTIVE USERS (also resubmits to admin)
 router.put("/:id", auth, upload.single("document"), async (req, res) => {
   try {
     const { githubLink, notes } = req.body
     const submission = await TaskSubmission.findById(req.params.id)
+      .populate("task", "title status")
 
     if (!submission) {
       return res.status(404).json({ error: "Submission not found" })
@@ -239,7 +240,10 @@ router.put("/:id", auth, upload.single("document"), async (req, res) => {
       fileType = req.file.mimetype
     }
 
-    // Update submission
+    // Store old status before update for tracking
+    const previousStatus = submission.status
+
+    // Update submission and reset status to Pending for admin review (resubmission)
     const updatedSubmission = await TaskSubmission.findByIdAndUpdate(
       req.params.id,
       {
@@ -248,6 +252,8 @@ router.put("/:id", auth, upload.single("document"), async (req, res) => {
           notes: notes || "",
           documentLink,
           fileType,
+          status: "Pending", // Reset to Pending for admin to review again
+          resubmittedAt: Date.now(), // Track when it was resubmitted
           updatedAt: Date.now(),
         },
       },
@@ -257,9 +263,29 @@ router.put("/:id", auth, upload.single("document"), async (req, res) => {
       .populate("user", "name email")
       .populate("reviewHistory.reviewedBy", "name email")
 
+    // Find admin user(s) to notify about resubmission - only active admins
+    const admins = await User.find({ role: "Admin", stillExist: 1 })
+    const taskTitle = submission.task?.title || "Unknown Task"
+    
+    for (const admin of admins) {
+      await Notification.create({
+        recipient: admin._id,
+        type: "task_resubmitted",
+        title: "Task Resubmitted",
+        message: `${user.name} has resubmitted their work for task: '${taskTitle}'. Please review the updated submission.`,
+        task: submission.task?._id,
+      })
+    }
+
+    console.log(`✅ Submission ${req.params.id} updated and resubmitted by ${user.name}`)
+
     // Emit socket event for real-time updates
     if (req.io) {
-      req.io.emit("submission-updated", updatedSubmission)
+      req.io.emit("submission-resubmitted", {
+        submission: updatedSubmission,
+        previousStatus,
+        resubmittedBy: user.name,
+      })
     }
 
     res.json(updatedSubmission)

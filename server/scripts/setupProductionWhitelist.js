@@ -181,15 +181,8 @@ async function setupProductionWhitelist() {
     let adminUser = await User.findOne({ role: 'Admin' });
 
     if (!adminUser) {
-      // Create a system admin user if none exists
-      adminUser = await User.create({
-        name: 'System Admin',
-        email: 'admin@system.local',
-        password: 'temp_password_123',
-        role: 'Admin',
-        department: null
-      });
-      console.log('Created system admin user for whitelist management');
+      console.error('Error: No admin user found. Please create an admin user first using seedAdmin.js');
+      process.exit(1);
     }
 
     // Clear existing whitelist (optional - remove this line to keep existing entries)

@@ -18,6 +18,7 @@ export function DashboardSidebar() {
           title: "Main",
           routes: [
             { title: "Dashboard", href: "/userdashboard", icon: LayoutDashboardIcon },
+            { title: "My Tasks", href: "/my-tasks", icon: CheckSquare },
             { title: "Set Aims", href: "/aims", icon: Target },
             { title: "Progress", href: "/progress", icon: BarChart },
           ]

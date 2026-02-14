@@ -44,6 +44,7 @@ import ProcurementDashboard from "./pages/ProcurementDashboard";
 import EnhancedSalaryDashboard from "./pages/EnhancedSalaryDashboard";
 import BiometricAttendanceDashboard from "./pages/BiometricAttendanceDashboard";
 import NewSalaryManagement from "./pages/NewSalaryManagement";
+import MyTasks from "./pages/MyTasks";
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -221,6 +222,14 @@ function AppContent() {
                         element={
                           <ProtectedRoute>
                             <UserDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/my-tasks"
+                        element={
+                          <ProtectedRoute>
+                            <MyTasks />
                           </ProtectedRoute>
                         }
                       />

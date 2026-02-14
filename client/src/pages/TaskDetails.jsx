@@ -582,6 +582,7 @@ import {
   BarChart3,
   FileCode,
   Layers,
+  RefreshCw,
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/ui/card"
@@ -769,7 +770,7 @@ function TaskDetails() {
 
         toast({
           title: "Success",
-          description: "Your submission has been updated",
+          description: "Your submission has been updated and resubmitted to admin for review",
         })
       } else {
         const response = await axios.post(`${API_URL}/submissions`, submissionData, config)
@@ -999,10 +1000,26 @@ function TaskDetails() {
                         )}
                         <div className="flex items-center justify-between text-xs text-muted-foreground pt-2">
                           <span>Submitted on {new Date(submission.createdAt).toLocaleDateString()}</span>
-                          {submission.updatedAt !== submission.createdAt && (
-                            <span>Updated on {new Date(submission.updatedAt).toLocaleDateString()}</span>
+                          {submission.resubmittedAt && (
+                            <Badge className="bg-blue-500/10 text-blue-500 text-xs">
+                              <RefreshCw className="h-3 w-3 mr-1" />
+                              Resubmitted {new Date(submission.resubmittedAt).toLocaleDateString()}
+                            </Badge>
                           )}
                         </div>
+                        {/* Update Task Button */}
+                        {isAssignedToCurrentUser && (
+                          <div className="pt-4 border-t mt-4">
+                            <Button 
+                              onClick={() => setIsSubmissionDialogOpen(true)}
+                              variant="outline"
+                              className="w-full"
+                            >
+                              <RefreshCw className="h-4 w-4 mr-2" />
+                              Update & Resubmit Task
+                            </Button>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                     {submission.feedback && (

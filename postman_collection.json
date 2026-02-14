@@ -44,7 +44,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\",\n  \"department\": \"Engineering\",\n  \"role\": \"Employee\"\n}",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"<your_password>\",\n  \"department\": \"Engineering\",\n  \"role\": \"Employee\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -79,7 +79,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\"\n}",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"<your_password>\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

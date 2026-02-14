@@ -6,7 +6,7 @@ import { useState, useEffect } from "react"
 import axios from "axios"
 import { useNavigate } from "react-router-dom"
 import { useToast } from "../hooks/use-toast"
-import { Check, Clock, Filter, Github, Link2, Loader2, ThumbsDown, ThumbsUp, Search, AlertTriangle, ExternalLink, CheckCircle, XCircle, HelpCircle, FileText } from 'lucide-react'
+import { Check, Clock, Filter, Github, Link2, Loader2, ThumbsDown, ThumbsUp, Search, AlertTriangle, ExternalLink, CheckCircle, XCircle, HelpCircle, FileText, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/ui/card"
 import { Input } from "../components/ui/input"
 import { Button } from "../components/ui/button"
@@ -385,8 +385,13 @@ const handleReviewSubmission = async () => {
                           </CardDescription>
                         </div>
                         {submission && (
-                          <div className="flex-shrink-0">
+                          <div className="flex-shrink-0 flex flex-col gap-1 items-end">
                             {getSubmissionStatusBadge(submission.status)}
+                            {submission.resubmittedAt && (
+                              <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:hover:bg-blue-900/70 flex items-center gap-1 text-xs">
+                                <RefreshCw className="h-3 w-3" /> Resubmitted
+                              </Badge>
+                            )}
                           </div>
                         )}
                       </div>
@@ -628,7 +633,16 @@ const handleReviewSubmission = async () => {
                               )}
                             </td>
                             <td className="p-4">
-                              {submission ? getSubmissionStatusBadge(submission.status) : <span>—</span>}
+                              {submission ? (
+                                <div className="flex flex-col gap-1">
+                                  {getSubmissionStatusBadge(submission.status)}
+                                  {submission.resubmittedAt && (
+                                    <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-300 text-xs flex items-center gap-1 w-fit">
+                                      <RefreshCw className="h-3 w-3" /> Resubmitted
+                                    </Badge>
+                                  )}
+                                </div>
+                              ) : <span>—</span>}
                             </td>
                             <td className="p-4 text-right">
                               <div className="flex justify-end gap-2">
@@ -776,9 +790,21 @@ const handleReviewSubmission = async () => {
                             </td>
                             <td className="p-4">
                               {new Date(submission.createdAt).toLocaleDateString()}
+                              {submission.resubmittedAt && (
+                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                  Resubmitted: {new Date(submission.resubmittedAt).toLocaleDateString()}
+                                </div>
+                              )}
                             </td>
                             <td className="p-4">
-                              {getSubmissionStatusBadge(submission.status)}
+                              <div className="flex flex-col gap-1">
+                                {getSubmissionStatusBadge(submission.status)}
+                                {submission.resubmittedAt && (
+                                  <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-300 text-xs flex items-center gap-1 w-fit">
+                                    <RefreshCw className="h-3 w-3" /> Resubmitted
+                                  </Badge>
+                                )}
+                              </div>
                             </td>
                             <td className="p-4 text-right">
                               <div className="flex justify-end gap-2">

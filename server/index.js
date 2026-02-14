@@ -146,6 +146,8 @@ const aimRoutes = require('./routes/aims_universal');
 const pushRoutes = require('./routes/push'); // Add this line
 const attendanceRoutes = require('./routes/attendance'); // New attendance routes
 const enhancedAttendanceRoutes = require('./routes/enhancedAttendance'); // Enhanced attendance routes
+const attendanceStatusRoutes = require('./routes/attendanceStatus'); // Attendance status routes for polling  
+const agentActivityRoutes = require('./routes/agentActivity'); // Agent activity routes
 const leaveRoutes = require('./routes/leave'); // New leave routes
 const enhancedSalaryRoutes = require('./routes/enhancedSalary'); // Enhanced salary with live attendance
 const enhancedAimsRoutes = require('./routes/enhancedAims'); // Enhanced aims routes
@@ -157,8 +159,6 @@ const chatbotRoutes = require('./routes/chatbot'); // Admin chatbot routes
 const biometricAttendanceRoutes = require('./routes/biometricAttendance'); // Biometric attendance and salary routes
 const hourlyBasedSalaryRoutes = require('./routes/hourlyBasedSalary'); // Hourly-based salary management
 const newSalaryRoutes = require('./routes/newSalaryManagement'); // New salary management system
-const attendanceStatusRoutes = require('./routes/attendanceStatus'); // Electron polling endpoint
-const agentActivityRoutes = require('./routes/agentActivity'); // Desktop agent activity ingestion
 const { startAttendancePersistenceCron, syncExistingAttendance } = require('./services/attendanceCronJobs'); // Attendance persistence cron
 // Middleware imports
 const auth = require('./middleware/auth');
@@ -374,7 +374,6 @@ app.use('/api/aims', aimRoutes);
 app.use('/api/user-notifications', userNotificationRoutes);
 app.use("/api/push", pushRoutes) // Added push routes use
 app.use("/api/monitoring", require("./routes/monitoring")); // Employee monitoring routes
-app.use("/api/ems-signals", require("./routes/emsSignals")); // EMS Signal Layer - Real-time activity signals
 app.use("/api/attendance", attendanceRoutes); // Attendance management routes
 app.use("/api/enhanced-attendance", enhancedAttendanceRoutes); // Enhanced attendance routes
 app.use("/api/attendance", attendanceStatusRoutes); // Electron agent polling endpoint (/api/attendance/status)

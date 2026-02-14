@@ -6,13 +6,13 @@ import { toast } from "react-toastify";
 
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../ui/dialog"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
 import { Textarea } from "../ui/textarea"
-import { Github, Link2, FileText } from "lucide-react"
+import { Github, Link2, FileText, RefreshCw } from "lucide-react"
 import { SimpleModeToggle } from "../simple-mode-toggle"
 import { ToastContainer } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
@@ -23,6 +23,18 @@ export function TaskSubmissionDialog({ open, onOpenChange, onSubmit, existingSub
     githubLink: existingSubmission?.githubLink || "",
     notes: existingSubmission?.notes || "",
   })
+
+  // Reset form data when existingSubmission changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      setFormData({
+        githubLink: existingSubmission?.githubLink || "",
+        notes: existingSubmission?.notes || "",
+      })
+      setDocumentFile(null)
+      setErrors({})
+    }
+  }, [existingSubmission, open])
   const [documentFile, setDocumentFile] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState({})
@@ -93,7 +105,7 @@ export function TaskSubmissionDialog({ open, onOpenChange, onSubmit, existingSub
       }
 
       await onSubmit(submissionData);
-      toast.success("Task submitted successfully");
+      toast.success(existingSubmission ? "Task updated and resubmitted to admin for review" : "Task submitted successfully");
     } catch (error) {
       console.error("Error submitting task:", error)
       toast.error("Failed to submit task")
@@ -148,6 +160,17 @@ export function TaskSubmissionDialog({ open, onOpenChange, onSubmit, existingSub
               Document or Photo
             </Label>
             <div className="space-y-2">
+              {/* Show existing document when updating */}
+              {existingSubmission?.documentLink && !documentFile && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <p className="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2.5 font-medium">
+                    <FileText className="h-5 w-5 flex-shrink-0" />
+                    <span className="truncate">Current file attached</span>
+                    <span className="text-xs bg-blue-200 dark:bg-blue-800 px-2 py-0.5 rounded-full ml-auto">Existing</span>
+                  </p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Upload a new file below to replace it</p>
+                </div>
+              )}
               <Input
                 id="document"
                 type="file"
@@ -160,7 +183,7 @@ export function TaskSubmissionDialog({ open, onOpenChange, onSubmit, existingSub
                   <p className="text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2.5 font-medium">
                     <FileText className="h-5 w-5 text-accent flex-shrink-0" />
                     <span className="truncate">{documentFile.name}</span>
-                    <span className="text-xs text-accent bg-accent/20 px-2 py-0.5 rounded-full ml-auto">Attached</span>
+                    <span className="text-xs text-accent bg-accent/20 px-2 py-0.5 rounded-full ml-auto">New File</span>
                   </p>
                 </div>
               )}
@@ -204,14 +227,18 @@ export function TaskSubmissionDialog({ open, onOpenChange, onSubmit, existingSub
               {isSubmitting ? (
                 <span className="flex items-center gap-2.5">
                   <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
-                  Submitting...
+                  {existingSubmission ? "Resubmitting..." : "Submitting..."}
                 </span>
               ) : (
                 <span className="flex items-center gap-2.5">
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Submit Task
+                  {existingSubmission ? (
+                    <RefreshCw className="h-5 w-5" />
+                  ) : (
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                    </svg>
+                  )}
+                  {existingSubmission ? "Update & Resubmit" : "Submit Task"}
                 </span>
               )}
             </Button>
