@@ -157,7 +157,27 @@ ipcMain.handle('login', async (event, credentials) => {
       // Start polling backend for attendance status
       startAttendancePoller();
       
+      // Immediately check current status to sync with Vercel
+      const currentStatus = await apiService.checkAttendanceStatus();
+      if (currentStatus.dayStarted && !appState.isDayStarted) {
+        console.log('🟢 Day already started on backend! Syncing...');
+        appState.isDayStarted = true;
+        
+        // Start activity tracking
+        if (activityTracker && currentStatus.attendanceId) {
+          activityTracker.start(currentStatus.attendanceId);
+        }
+      }
+      
       updateTrayMenu();
+      
+      // Send initial status to renderer
+      if (mainWindow) {
+        mainWindow.webContents.send('day-status-changed', { 
+          dayStarted: appState.isDayStarted,
+          attendanceId: currentStatus.attendanceId 
+        });
+      }
     }
     
     return result;
@@ -225,7 +245,17 @@ ipcMain.handle('end-day', async () => {
   }
 });
 
-ipcMain.handle('get-app-state', () => {
+ipcMain.handle('get-app-state', async () => {
+  // If logged in and poller exists, get fresh status from backend
+  if (appState.isLoggedIn && attendancePoller) {
+    try {
+      const currentStatus = await attendancePoller.forceCheck();
+      appState.isDayStarted = currentStatus.dayStarted;
+    } catch (error) {
+      console.error('Error fetching app state:', error);
+    }
+  }
+  
   return {
     isLoggedIn: appState.isLoggedIn,
     isDayStarted: appState.isDayStarted,

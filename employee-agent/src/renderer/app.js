@@ -252,5 +252,24 @@ window.electronAPI.onShowLogin(() => {
   showScreen('login');
 });
 
+// Listen for day status changes from backend polling
+window.electronAPI.onDayStatusChanged(async (data) => {
+  console.log('📡 Day status changed from backend:', data);
+  
+  // Get fresh app state
+  const appState = await window.electronAPI.getAppState();
+  
+  // Update dashboard if we're on the dashboard screen
+  if (currentScreen === 'dashboard') {
+    updateDashboard(appState);
+    
+    if (appState.isDayStarted) {
+      startStatsUpdate();
+    } else {
+      stopStatsUpdate();
+    }
+  }
+});
+
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', init);
