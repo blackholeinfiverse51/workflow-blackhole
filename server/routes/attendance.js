@@ -243,8 +243,13 @@ router.post('/start-day/:userId', auth, async (req, res) => {
         console.log(`📍 User ${userId} location geocoded: ${finalAddress} (${latitude}, ${longitude})`);
       } catch (error) {
         console.warn(`⚠️ Reverse geocoding failed: ${error.message}`);
-        finalAddress = finalAddress || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        // Fallback to coordinates if geocoding fails
+        finalAddress = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        console.log(`📍 User ${userId} using coordinates as address fallback: ${finalAddress}`);
       }
+    } else {
+      // Use provided address as-is
+      console.log(`📍 User ${userId} using provided address: ${finalAddress}`);
     }
     
     // Create or update attendance record
@@ -359,10 +364,12 @@ router.post('/start-day/:userId', auth, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Start day error:', error);
+    console.error('❌ Start day error for user', userId, ':', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({ 
       error: 'Failed to start day',
-      details: error.message 
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+      code: 'START_DAY_FAILED'
     });
   }
 });
