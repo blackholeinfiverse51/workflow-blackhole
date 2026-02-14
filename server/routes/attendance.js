@@ -11,6 +11,7 @@ const UserTag = require('../models/UserTag');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
 const DailyAttendance = require('../models/DailyAttendance');
+const { reverseGeocode } = require('../utils/reverseGeocode');
 
 // SIMPLE RULE: Spam validation = EXACTLY 8 hours for cumulative calculation
 const SPAM_VALIDATION_HOURS = 8;
