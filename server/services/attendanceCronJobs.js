@@ -154,6 +154,19 @@ function startAttendancePersistenceCron() {
           date: { $gte: today, $lt: tomorrow }
         });
 
+        // 🔧 FETCH WORK SESSION TO GET BREAK TIME (pause/resume time)
+        const WorkSession = require('../models/WorkSession');
+        const workSession = await WorkSession.findOne({
+          employee: userId,
+          date: { $gte: today, $lt: tomorrow }
+        });
+        
+        let breakTimeMinutes = 0;
+        if (workSession && workSession.totalBreakTime) {
+          breakTimeMinutes = workSession.totalBreakTime;
+          console.log(`⏸️ Found ${breakTimeMinutes} minutes of break time for user ${attendance.user.name}`);
+        }
+
         // Prepare system notes for WFH cap if applied
         const wfhNote = wfhCapApplied 
           ? `[WFH Cap: ${originalHours.toFixed(2)}h → ${hoursWorked}h]` 
@@ -167,6 +180,7 @@ function startAttendancePersistenceCron() {
             startDayTime: attendance.startDayTime,
             endDayTime: endTime,
             totalHoursWorked: hoursWorked,
+            breakTime: breakTimeMinutes, // Include break time from work session
             workLocationType: attendance.workLocationType || (wfhStatus ? 'Home' : 'Office'),
             startDayLocation: attendance.startDayLocation,
             endDayLocation: attendance.endDayLocation,
@@ -190,6 +204,7 @@ function startAttendancePersistenceCron() {
           // Update existing record
           dailyRecord.endDayTime = endTime;
           dailyRecord.totalHoursWorked = hoursWorked;
+          dailyRecord.breakTime = breakTimeMinutes; // Include break time from work session
           dailyRecord.endDayLocation = attendance.endDayLocation;
           dailyRecord.dailyProgressCompleted = !!attendance.progressSubmitted;
           dailyRecord.dailyAimCompleted = aim ? (aim.completionStatus !== 'Pending') : false;

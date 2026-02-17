@@ -475,8 +475,22 @@ router.post('/end-day/:userId', auth, async (req, res) => {
     const totalMinutes = Math.floor(totalMilliseconds / (1000 * 60));
     const hoursWorked = totalMilliseconds / (1000 * 60 * 60);
 
+    // 🔧 FETCH WORK SESSION TO GET BREAK TIME
+    const WorkSession = require('../models/WorkSession');
+    const workSession = await WorkSession.findOne({
+      employee: userId,
+      date: { $gte: today, $lt: tomorrow }
+    });
+    
+    let breakTimeMinutes = 0;
+    if (workSession && workSession.totalBreakTime) {
+      breakTimeMinutes = workSession.totalBreakTime;
+      console.log(`⏸️ Found ${breakTimeMinutes} minutes of break time for user ${userId}`);
+    }
+
     // Update attendance record with calculated values
     attendanceRecord.hoursWorked = Math.round(hoursWorked * 100) / 100;
+    attendanceRecord.breakTime = breakTimeMinutes; // Set break time from work session
     attendanceRecord.isPresent = true;
     
     // Calculate overtime if applicable
@@ -513,6 +527,7 @@ router.post('/end-day/:userId', auth, async (req, res) => {
         };
       }
       dailyRecord.totalHoursWorked = Math.round(hoursWorked * 100) / 100;
+      dailyRecord.breakTime = breakTimeMinutes; // Set break time from work session
       dailyRecord.isPresent = true;
       dailyRecord.status = 'Present';
       dailyRecord.dailyProgressCompleted = true;
@@ -1117,7 +1132,17 @@ router.get('/live', adminAuth, async (req, res) => {
 
     console.log(`📊 Found ${attendance.length} attendance records for today`);
 
-    // Create a map of user attendance
+    // Fetch work sessions for today to include pause/resume status
+    const WorkSession = require('../models/WorkSession');
+    const workSessions = await WorkSession.find({
+      date: { $gte: startOfDay, $lte: endOfDay }
+    })
+      .select('employee status pausedAt resumedAt totalBreakTime targetHours startTime endTime')
+      .lean();
+
+    console.log(`📊 Found ${workSessions.length} work sessions for today`);
+
+    // Create a map of user attendance and work sessions
     const attendanceMap = new Map();
     attendance.forEach(record => {
       if (record.user && record.user._id) {
@@ -1125,10 +1150,18 @@ router.get('/live', adminAuth, async (req, res) => {
       }
     });
 
+    const workSessionMap = new Map();
+    workSessions.forEach(session => {
+      if (session.employee) {
+        workSessionMap.set(session.employee.toString(), session);
+      }
+    });
+
     // Build complete attendance list with all users
     const completeAttendance = allUsers.map(user => {
       const userId = user._id.toString();
       const attendanceRecord = attendanceMap.get(userId);
+      const workSession = workSessionMap.get(userId);
       
       if (attendanceRecord) {
         // User has attendance record
@@ -1136,7 +1169,8 @@ router.get('/live', adminAuth, async (req, res) => {
           ...attendanceRecord,
           status: attendanceRecord.isPresent ? 
             (attendanceRecord.isLate ? 'late' : 'present') :
-            (attendanceRecord.isLeave ? 'on-leave' : 'absent')
+            (attendanceRecord.isLeave ? 'on-leave' : 'absent'),
+          workSession: workSession || null // Include work session info
         };
       } else {
         // User has no attendance - mark as absent
@@ -1153,7 +1187,8 @@ router.get('/live', adminAuth, async (req, res) => {
           endDayTime: null,
           hoursWorked: 0,
           workPattern: null,
-          source: null
+          source: null,
+          workSession: workSession || null // Include work session info even for absent users
         };
       }
     });
@@ -1179,6 +1214,8 @@ router.get('/live', adminAuth, async (req, res) => {
     const onTimeToday = presentToday - lateToday;
     const dayStartedCount = completeAttendance.filter(a => a.startDayTime).length;
     const dayEndedCount = completeAttendance.filter(a => a.endDayTime).length;
+    const pausedCount = completeAttendance.filter(a => a.workSession && a.workSession.status === 'paused').length;
+    const activeWorkingCount = completeAttendance.filter(a => a.workSession && a.workSession.status === 'active').length;
 
     const totalHoursToday = completeAttendance.reduce((sum, a) => sum + (a.hoursWorked || 0), 0);
     const avgHoursToday = presentToday > 0 ? Math.round((totalHoursToday / presentToday) * 100) / 100 : 0;
@@ -1192,6 +1229,8 @@ router.get('/live', adminAuth, async (req, res) => {
       onTimeToday,
       dayStartedCount,
       dayEndedCount,
+      pausedCount,
+      activeWorkingCount,
       presentPercentage: totalEmployees > 0 ? Math.round((presentToday / totalEmployees) * 100 * 10) / 10 : 0,
       absentPercentage: totalEmployees > 0 ? Math.round((absentToday / totalEmployees) * 100 * 10) / 10 : 0,
       onTimePercentage: presentToday > 0 ? Math.round((onTimeToday / presentToday) * 100 * 10) / 10 : 0,

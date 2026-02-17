@@ -230,6 +230,10 @@ const LiveAttendanceAdminPanel = () => {
   });
 
   const getStatusBadge = (record) => {
+    // Check if work session is paused
+    if (record.workSession && record.workSession.status === 'paused') {
+      return <Badge className="bg-orange-500 text-white animate-pulse">⏸️ Paused</Badge>;
+    }
     if (record.isLeave) {
       return <Badge className="bg-purple-500">On Leave</Badge>;
     }
@@ -440,14 +444,15 @@ const LiveAttendanceAdminPanel = () => {
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
 
         {/* Professional Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8 gap-4">
           {[
             { label: 'Total Employees', value: stats.totalEmployees, icon: Users, color: 'blue', bgColor: 'bg-blue-50', iconBg: 'bg-blue-100', textColor: 'text-blue-700', iconColor: 'text-blue-600' },
             { label: 'Present Today', value: stats.presentToday, icon: CheckCircle, color: 'green', bgColor: 'bg-green-50', iconBg: 'bg-green-100', textColor: 'text-green-700', iconColor: 'text-green-600' },
+            { label: 'Active Working', value: stats.activeWorkingCount || 0, icon: Play, color: 'teal', bgColor: 'bg-teal-50', iconBg: 'bg-teal-100', textColor: 'text-teal-700', iconColor: 'text-teal-600' },
+            { label: 'Paused', value: stats.pausedCount || 0, icon: Pause, color: 'orange', bgColor: 'bg-orange-50', iconBg: 'bg-orange-100', textColor: 'text-orange-700', iconColor: 'text-orange-600' },
             { label: 'Absent Today', value: stats.absentToday, icon: XCircle, color: 'red', bgColor: 'bg-red-50', iconBg: 'bg-red-100', textColor: 'text-red-700', iconColor: 'text-red-600' },
-            { label: 'On Leave', value: stats.onLeaveToday, icon: AlertCircle, color: 'orange', bgColor: 'bg-orange-50', iconBg: 'bg-orange-100', textColor: 'text-orange-700', iconColor: 'text-orange-600' },
+            { label: 'On Leave', value: stats.onLeaveToday, icon: AlertCircle, color: 'purple', bgColor: 'bg-purple-50', iconBg: 'bg-purple-100', textColor: 'text-purple-700', iconColor: 'text-purple-600' },
             { label: 'Late Arrivals', value: stats.lateToday, icon: Clock, color: 'yellow', bgColor: 'bg-yellow-50', iconBg: 'bg-yellow-100', textColor: 'text-yellow-700', iconColor: 'text-yellow-600' },
-            { label: 'Avg Hours', value: stats.avgHoursToday ? `${stats.avgHoursToday.toFixed(1)}h` : '0h', icon: TrendingUp, color: 'purple', bgColor: 'bg-purple-50', iconBg: 'bg-purple-100', textColor: 'text-purple-700', iconColor: 'text-purple-600' },
             { label: 'Attendance %', value: `${stats.presentPercentage.toFixed(1)}%`, icon: BarChart3, color: 'cyan', bgColor: 'bg-cyan-50', iconBg: 'bg-cyan-100', textColor: 'text-cyan-700', iconColor: 'text-cyan-600' }
           ].map((stat, idx) => {
             const Icon = stat.icon;
@@ -637,6 +642,12 @@ const LiveAttendanceAdminPanel = () => {
                                     <p className="text-xs text-gray-500 truncate mt-0.5">
                                       {record.user?.email}
                                     </p>
+                                    {record.workSession && record.workSession.totalBreakTime > 0 && (
+                                      <p className="text-xs text-orange-600 mt-1.5 flex items-center gap-1">
+                                        <Pause className="w-3 h-3" />
+                                        Break: {Math.floor(record.workSession.totalBreakTime)} min
+                                      </p>
+                                    )}
                                     {lastLocation && (
                                       <p className="text-xs text-gray-500 mt-1.5 flex items-center gap-1">
                                         <MapPin className="w-3 h-3" />
